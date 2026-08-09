@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS demos(
  last_health_at INTEGER,
  health_failures INTEGER NOT NULL DEFAULT 0,
  demo_image_id TEXT,
- degraded_logs TEXT
+ degraded_logs TEXT,
+ public_route_status TEXT NOT NULL DEFAULT 'unknown',
+ public_route_last_error TEXT
 );
 
 CREATE TABLE IF NOT EXISTS settings(
@@ -113,6 +115,8 @@ ensureColumn("demos","routing_ms","INTEGER DEFAULT 0");
 ensureColumn("demos","demo_type","TEXT NOT NULL DEFAULT 'public'");
 ensureColumn("demos","platform_version","TEXT NOT NULL DEFAULT 'unknown'");
 ensureColumn("demos","degraded_logs","TEXT");
+ensureColumn("demos","public_route_status","TEXT NOT NULL DEFAULT 'unknown'");
+ensureColumn("demos","public_route_last_error","TEXT");
 ensureColumn("demos","demo_image_id","TEXT");
 ensureColumn("demos","health_failures","INTEGER NOT NULL DEFAULT 0");
 ensureColumn("demos","last_health_at","INTEGER");

@@ -9,66 +9,104 @@ function stage(id,s,m,status="provisioning"){
  event(id,s,m,"info");
 }
 
-async function stablePublicCheck(id,url,wp){
-  event(id,"routing","Verifying demo stability");
-  const checks=[
-    {path:"/",waitAfter:2000},
-    {path:"/",waitAfter:2000},
-    {path:"/wp-login.php",waitAfter:1000}
-  ];
-  for(let i=0;i<checks.length;i++){
-    const c=checks[i];
-    let response;
-    try{
-      response=await fetch(url+c.path,{redirect:"manual",signal:AbortSignal.timeout(5000)});
-    }catch(err){
-      const logs=await actions.logs(wp,250);
-      db.prepare("UPDATE demos SET degraded_logs=? WHERE id=?").run(logs,id);
-      event(id,"routing",`Stability check ${i+1} failed: ${err.message}`,"error");
-      throw new Error(`Public stability check failed: ${err.message}`);
-    }
-    event(id,"routing",`Stability check ${i+1} ${c.path}: HTTP ${response.status}`,"debug");
-    if(response.status!==200 && !(c.path==="/wp-login.php" && response.status===302)){
-      const logs=await actions.logs(wp,250);
-      db.prepare("UPDATE demos SET degraded_logs=? WHERE id=?").run(logs,id);
-      throw new Error(`Public stability check returned HTTP ${response.status} for ${c.path}`);
-    }
-    if(c.waitAfter)await sleep(c.waitAfter);
-  }
-  const verify=await actions.exec(wp,["/bin/bash","-lc","cd /var/www/html && wp db check --allow-root && wp option get siteurl --allow-root"]);
-  if(verify.code!==0){
-    const logs=await actions.logs(wp,250);
-    db.prepare("UPDATE demos SET degraded_logs=? WHERE id=?").run(logs,id);
-    throw new Error("Database verification failed after public checks");
-  }
-  event(id,"routing","Demo stability verification passed");
+
+function fetchDetail(err){
+  const cause=err&&err.cause;
+  const bits=[err&&err.message,cause&&cause.code,cause&&cause.hostname,cause&&cause.message].filter(Boolean);
+  return [...new Set(bits)].join(" | ")||"fetch failed";
 }
 
-function startPostReadyMonitor(id,url,wp){
+async function internalWordPressCheck(id,wp,url){
+  const host=new URL(url).hostname;
+  const result=await actions.exec(wp,[
+    "/bin/bash","-lc",
+    `cd /var/www/html &&
+     wp db check --allow-root >/dev/null &&
+     code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 -H "Host: ${host}" http://127.0.0.1/ || true) &&
+     echo "$code" &&
+     case "$code" in 200|301|302) exit 0;; *) exit 12;; esac`
+  ]);
+
+  if(result.code!==0){
+    const logs=await actions.logs(wp,250);
+    db.prepare("UPDATE demos SET degraded_logs=? WHERE id=?").run(logs,id);
+    throw new Error(`Internal WordPress health check failed: ${result.out.slice(-400)}`);
+  }
+
+  return String(result.out||"").trim().split(/\r?\n/).pop()||"ok";
+}
+
+async function verifyPublicRoute(id,url){
+  let status=0,lastError="";
+  const attempts=Math.max(1,config.publicRouteAttempts||5);
+
+  for(let i=0;i<attempts;i++){
+    try{
+      const rr=await fetch(url,{redirect:"manual",signal:AbortSignal.timeout(3000)});
+      status=rr.status;
+      event(id,"routing",`Public HTTPS check ${i+1}/${attempts}: HTTP ${status}`,"debug");
+      if(status>=200&&status<500){
+        db.prepare("UPDATE demos SET public_route_status='verified',public_route_last_error=NULL WHERE id=?").run(id);
+        return {verified:true,status,error:""};
+      }
+      lastError=`HTTP ${status}`;
+    }catch(err){
+      lastError=fetchDetail(err);
+      event(id,"routing",`Public HTTPS check ${i+1}/${attempts}: ${lastError}`,"debug");
+    }
+    await sleep(1000);
+  }
+
+  db.prepare("UPDATE demos SET public_route_status='unverified',public_route_last_error=? WHERE id=?")
+    .run(lastError||"No successful public route response",id);
+
+  return {verified:false,status,error:lastError||"No successful public route response"};
+}
+
+function startPostReadyMonitor(id,url,wp,publicRouteVerified){
   let checks=0;
   const maxChecks=12;
+
   const run=async()=>{
     checks++;
+
     try{
-      const r=await fetch(url,{redirect:"manual",signal:AbortSignal.timeout(5000)});
-      if(r.status>=500){
-        const logs=await actions.logs(wp,300);
-        db.prepare("UPDATE demos SET health_status='degraded',last_health_at=?,health_failures=health_failures+1,degraded_logs=? WHERE id=?")
-          .run(Math.floor(Date.now()/1000),logs,id);
-        event(id,"health",`Post-ready health check failed with HTTP ${r.status}`,"error");
-      }else{
-        db.prepare("UPDATE demos SET health_status='healthy',last_health_at=? WHERE id=?")
-          .run(Math.floor(Date.now()/1000),id);
-        event(id,"health",`Post-ready health check ${checks}/${maxChecks}: HTTP ${r.status}`,"debug");
-      }
+      const code=await internalWordPressCheck(id,wp,url);
+      db.prepare("UPDATE demos SET health_status='healthy',last_health_at=? WHERE id=?")
+        .run(Math.floor(Date.now()/1000),id);
+      event(id,"health",`Internal health ${checks}/${maxChecks}: HTTP ${code}`,"debug");
     }catch(err){
       const logs=await actions.logs(wp,300);
       db.prepare("UPDATE demos SET health_status='degraded',last_health_at=?,health_failures=health_failures+1,degraded_logs=? WHERE id=?")
         .run(Math.floor(Date.now()/1000),logs,id);
-      event(id,"health",`Post-ready health check error: ${err.message}`,"error");
+      event(id,"health",`Internal post-ready health failure: ${err.message}`,"error");
+      if(checks<maxChecks)setTimeout(run,10000);
+      return;
     }
+
+    if(publicRouteVerified){
+      try{
+        const r=await fetch(url,{redirect:"manual",signal:AbortSignal.timeout(5000)});
+        if(r.status>=500){
+          db.prepare("UPDATE demos SET public_route_status='failed',public_route_last_error=? WHERE id=?")
+            .run(`HTTP ${r.status}`,id);
+          event(id,"health",`Public route health returned HTTP ${r.status}`,"error");
+        }else{
+          db.prepare("UPDATE demos SET public_route_status='verified',public_route_last_error=NULL WHERE id=?").run(id);
+          event(id,"health",`Public route health ${checks}/${maxChecks}: HTTP ${r.status}`,"debug");
+        }
+      }catch(err){
+        const detail=fetchDetail(err);
+        db.prepare("UPDATE demos SET public_route_status='unverified',public_route_last_error=? WHERE id=?")
+          .run(detail,id);
+        event(id,"health",`Public route became unverifiable from launcher: ${detail}`,"warn");
+        publicRouteVerified=false;
+      }
+    }
+
     if(checks<maxChecks)setTimeout(run,10000);
   };
+
   setTimeout(run,10000);
 }
 
@@ -122,18 +160,37 @@ async function provision(id,{reset=false}={}){
   }
   event(id,"finalising","WordPress verification passed");
 db.prepare("UPDATE demos SET finalise_ms=? WHERE id=?").run(Date.now()-t,id);
-  t=Date.now();stage(id,"routing","Preparing secure URL",reset?"resetting":"provisioning");event(id,"routing","Checking public HTTPS route");
-  const routeStart=Date.now();let routeStatus=0,routeAttempts=0;
-  for(let i=0;i<30;i++){
-    routeAttempts++;
-    try{
-      const rr=await fetch(d.url,{redirect:"manual",signal:AbortSignal.timeout(3000)});
-      routeStatus=rr.status;event(id,"routing",`HTTPS check ${routeAttempts}: HTTP ${routeStatus}`,"debug");
-      if(routeStatus>=200&&routeStatus<500)break;
-    }catch(err){event(id,"routing",`HTTPS check ${routeAttempts}: ${err.name||"error"} ${err.message||""}`,"debug");}
-    await sleep(1000);
+  t=Date.now();
+  stage(id,"routing","Preparing secure URL",reset?"resetting":"provisioning");
+
+  event(id,"routing","Checking WordPress internally");
+  const internalCode=await internalWordPressCheck(id,wp,d.url);
+  event(id,"routing",`Internal WordPress check passed with HTTP ${internalCode}`);
+
+  event(id,"routing","Checking public HTTPS route");
+  const publicCheck=await verifyPublicRoute(id,d.url);
+
+  if(publicCheck.verified){
+    event(id,"routing",`Public HTTPS route verified with HTTP ${publicCheck.status}`);
+  }else{
+    event(id,"routing",`Public route could not be verified from launcher: ${publicCheck.error}`,"warn");
+    if(config.requirePublicRoute){
+      throw new Error(`Public route verification failed: ${publicCheck.error}`);
+    }
+    event(id,"routing","Internal WordPress health is good; continuing with route marked unverified","warn");
   }
-  event(id,"routing",`Public route check ${(Date.now()-routeStart)/1000}s, attempts=${routeAttempts}, last=${routeStatus||"none"}`);db.prepare("UPDATE demos SET routing_ms=?,provision_finished_at=?,status='running',provision_stage='ready',status_message='Your demo is ready',error_message=NULL,health_status='healthy',last_health_at=? WHERE id=?").run(Date.now()-t,Math.floor(Date.now()/1000),Math.floor(Date.now()/1000),id);event(id,"ready","Demo provisioning completed successfully");startPostReadyMonitor(id,d.url,wp);
+
+  db.prepare("UPDATE demos SET routing_ms=?,provision_finished_at=?,status='running',provision_stage='ready',status_message=?,error_message=NULL,health_status='healthy',last_health_at=? WHERE id=?")
+    .run(
+      Date.now()-t,
+      Math.floor(Date.now()/1000),
+      publicCheck.verified?"Your demo is ready":"Your demo is ready; public route verification is pending",
+      Math.floor(Date.now()/1000),
+      id
+    );
+
+  event(id,"ready",publicCheck.verified?"Demo provisioning completed successfully":"Demo provisioning completed; public route unverified from launcher");
+  startPostReadyMonitor(id,d.url,wp,publicCheck.verified);
  }catch(e){
   event(id,"failed",e.message,"error");const l=(await actions.logs(wp))+"\\n--- DATABASE ---\\n"+(await actions.logs(dbc));db.prepare("UPDATE demos SET status='failed',provision_stage='failed',status_message='Provisioning failed',error_message=?,failure_logs=?,provision_finished_at=? WHERE id=?").run(e.message,l,Math.floor(Date.now()/1000),id);
  }

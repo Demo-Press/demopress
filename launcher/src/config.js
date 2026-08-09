@@ -22,5 +22,7 @@ module.exports={
  demoImage:process.env.DEMO_IMAGE||"demopress-wordpress:latest",
  snapshotRoot:process.env.SNAPSHOT_ROOT||"/data/snapshots",
  maxSnapshots:n("MAX_SNAPSHOTS",5),
+ requirePublicRoute:String(process.env.REQUIRE_PUBLIC_ROUTE_CHECK||"false").toLowerCase()==="true",
+ publicRouteAttempts:n("PUBLIC_ROUTE_CHECK_ATTEMPTS",5),
  templateVersion:process.env.TEMPLATE_VERSION||"unversioned"
 };
