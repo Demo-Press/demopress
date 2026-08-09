@@ -1,0 +1,40 @@
+services:
+  launcher:
+    build:
+      context: ./launcher
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DOMAIN: ${DOMAIN}
+      TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
+      DEFAULT_DEMO_LIFETIME: ${DEFAULT_DEMO_LIFETIME}
+      MAX_DEMO_LIFETIME: ${MAX_DEMO_LIFETIME}
+      FAILED_RETENTION: ${FAILED_RETENTION}
+      MAX_ACTIVE_DEMOS: ${MAX_ACTIVE_DEMOS}
+      MAX_ACTIVE_DEMOS_PER_IP: ${MAX_ACTIVE_DEMOS_PER_IP}
+      MAX_LAUNCHES_PER_IP_PER_HOUR: ${MAX_LAUNCHES_PER_IP_PER_HOUR}
+      MIN_FREE_MEMORY_MB: ${MIN_FREE_MEMORY_MB}
+      SQLITE_PATH: ${SQLITE_PATH}
+      DOCKER_SOCKET: ${DOCKER_SOCKET}
+      COOLIFY_NETWORK: ${COOLIFY_NETWORK}
+      TRAEFIK_ENTRYPOINTS: ${TRAEFIK_ENTRYPOINTS}
+      TRAEFIK_CERTRESOLVER: ${TRAEFIK_CERTRESOLVER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
+      DEMO_IMAGE: ${DEMO_IMAGE}
+      SNAPSHOT_ROOT: ${SNAPSHOT_ROOT}
+      MAX_SNAPSHOTS: ${MAX_SNAPSHOTS}
+      TEMPLATE_VERSION: ${TEMPLATE_VERSION}
+      TZ: ${TZ}
+    expose:
+      - "3000"
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true

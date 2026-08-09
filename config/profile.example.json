@@ -1,0 +1,31 @@
+{
+  "platformName": "DemoPress",
+  "productName": "My WordPress Product",
+  "companyName": "My Company",
+  "homepageUrl": "https://demopress.co.uk",
+  "launcherDomain": "demo.example.com",
+  "templateDomain": "template.demo.example.com",
+  "tagline": "Try our WordPress product in a private disposable sandbox.",
+  "launchHeading": "Try the live demo",
+  "launchDescription": "Launch a private clone of our configured WordPress demonstration site.",
+  "readyHeading": "Your demo is ready.",
+  "requiredPlugins": [],
+  "allowedPlugins": [],
+  "requiredTheme": "",
+  "allowedThemes": [],
+  "dashboardTips": [
+    "Explore the configured site from the frontend.",
+    "Open WordPress Admin and try the product settings.",
+    "Reset the demo whenever you want to return to the golden template."
+  ],
+  "demoRoleName": "DemoPress Demo Admin",
+  "hidePluginThemeMenus": true,
+  "disableWpCron": true,
+  "disableXmlRpc": true,
+  "branding": {
+    "logoUrl": "",
+    "faviconUrl": "",
+    "accent": "#ffffff",
+    "footerText": "Powered by DemoPress"
+  }
+}

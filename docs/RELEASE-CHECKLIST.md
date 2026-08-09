@@ -1,0 +1,21 @@
+# DemoPress 1.0 Release Checklist
+
+- Launcher DNS resolves.
+- Wildcard demo DNS resolves.
+- Template DNS resolves.
+- HTTPS works for launcher and wildcard demo hosts.
+- `/data` is persistent.
+- Manager authentication is strong.
+- Demo image `demopress-wordpress:latest` exists on the VPS.
+- DemoPress Agent is installed/configured on the golden template.
+- Template token matches launcher.
+- Profile required plugins/theme match the template.
+- Template validation passes.
+- Snapshot publishes successfully.
+- Administrator test demo becomes healthy.
+- One-click Admin works.
+- Dashboard preferences copy correctly.
+- Reset restores the golden snapshot.
+- Destroy removes WordPress and MariaDB containers.
+- Mobile Manager works.
+- Diagnostics show no orphans.

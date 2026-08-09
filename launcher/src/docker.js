@@ -1,0 +1,1 @@
+const Docker=require("dockerode");const config=require("./config");module.exports=new Docker({socketPath:config.socket});
