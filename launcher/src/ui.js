@@ -170,6 +170,15 @@ function css(){return `<style>
   .btn.mini{min-height:38px}
 }
 
+
+.fieldhint{display:block;margin-top:6px;color:#777;font-size:12px;line-height:1.45}
+.fieldok{color:#7ee787}.fielderror{color:#ff7b72}
+.toast{position:fixed;right:20px;top:20px;z-index:9999;max-width:420px;background:#151518;border:1px solid #34343b;color:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 12px 35px rgba(0,0,0,.35);display:flex;gap:10px;align-items:flex-start}
+.toast.success{border-color:#2f6f44}.toast.error{border-color:#8a3434}.toast strong{display:block;margin-bottom:2px}.toast .muted{font-size:12px}
+.setupcheck{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}.setupcheck:last-child{border-bottom:0}
+.setupdot{width:10px;height:10px;border-radius:50%;background:#555;margin-top:5px;flex:0 0 auto}.setupdot.ok{background:#3fb950}.setupdot.bad{background:#f85149}.setupdot.warn{background:#d29922}
+input:invalid,textarea:invalid,select:invalid{border-color:#743a3a}
+
 .publicfooter{margin:42px 0 10px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;color:#777;font-size:12px}.publicfooter a{color:#aaa;text-decoration:none}.publicfooter a:hover{color:#fff}</style>`}
 
 function publicPage(title,body){
@@ -184,6 +193,22 @@ function publicPage(title,body){
 function adminPage(title,body,active){
  const favicon=profile.branding&&profile.branding.faviconUrl?`<link rel="icon" href="${esc(profile.branding.faviconUrl)}">`:"";
  const token=csrfToken();
- return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>${favicon}${css()}</head><body><div class="admin">${adminNav(active)}<main class="main">${body}</main></div><script>(function(){const t=${JSON.stringify(token)};document.querySelectorAll('form[method="post"],form[method="POST"]').forEach(function(f){if(!f.querySelector('input[name="_csrf"]')){const i=document.createElement("input");i.type="hidden";i.name="_csrf";i.value=t;f.appendChild(i)}})})();</script></body></html>`;
+ return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>${favicon}${css()}</head><body><div class="admin">${adminNav(active)}<main class="main">${body}</main></div><script>(function(){
+const t=${JSON.stringify(token)};
+document.querySelectorAll('form[method="post"],form[method="POST"]').forEach(function(f){
+ if(!f.querySelector('input[name="_csrf"]')){const i=document.createElement("input");i.type="hidden";i.name="_csrf";i.value=t;f.appendChild(i)}
+ f.addEventListener("submit",function(){if(!f.checkValidity())return;const b=f.querySelector('button[type="submit"],button:not([type])');if(b){b.disabled=true;b.dataset.old=b.textContent;b.textContent="Saving…"}})
+});
+const q=new URLSearchParams(location.search),saved=q.get("saved"),error=q.get("error");
+if(saved||error){
+ const el=document.createElement("div");el.className="toast "+(error?"error":"success");
+ const msg=error||saved||"Changes saved.";
+ el.innerHTML='<div><strong>'+(error?'Could not save':'Saved successfully')+'</strong><div class="muted"></div></div>';
+ el.querySelector(".muted").textContent=msg;
+ document.body.appendChild(el);
+ setTimeout(()=>el.remove(),4500);
+ const u=new URL(location.href);u.searchParams.delete("saved");u.searchParams.delete("error");history.replaceState(null,"",u.pathname+(u.search||""));
+}
+})();</script></body></html>`;
 }
 module.exports={publicPage,adminPage};

@@ -86,7 +86,7 @@ r.get("/demos",(req,res)=>{
      <td>${secs(d)?fmtSec(secs(d)):"—"}</td>
      <td>
        <a class="btn mini secondary" href="/manage/demos/${d.id}">Details</a>
-       ${d.status==="running"?` <a class="btn mini secondary" target="_blank" href="${esc(d.url)}">Open</a>`:""}
+       ${d.status==="running"?` <a class="btn mini secondary" target="_blank" rel="noopener" href="${esc(d.url)}">Open</a>`:""}
      </td>
    </tr>`).join("")}
  </table>
@@ -100,8 +100,9 @@ r.get("/demos",(req,res)=>{
  `,"demos"));
 });
 
-r.get("/demos/:id",async(req,res)=>{const x=await live(req.params.id);if(!x)return res.status(404).send(adminPage("Demo not found",`<div class="crumb"><a href="/manage/demos">← Demos</a></div><h1>Demo not found.</h1><p class="muted">That demo record does not exist.</p><div class="actions"><a class="btn" href="/manage/demos">Back to Demos</a></div>`,"demos"));const d=x.demo,tm=stats([d]),mx=Math.max(1,...tm.map(v=>v.ms)),events=x.events.map(e=>`<tr><td>${new Date(e.created_at_ms||e.created_at*1000).toLocaleTimeString()}</td><td>${esc(e.stage)}</td><td>${esc(e.level)}</td><td>${esc(e.message)}</td></tr>`).join(""),auto=["queued","provisioning","resetting"].includes(d.status);res.send(adminPage("Demo Detail",`<div class="crumb"><a href="/manage/demos">← Back to Demos</a> / ${esc(d.id)}</div><div class="kpirow"><div><h1>${esc(d.id)}</h1><div class="sub"><span id="live-status" class="${cls(d.status)}">${esc(d.status)}</span> · <span id="live-stage">${esc(d.provision_stage)}</span> · ${d.demo_type==="admin_test"?"administrator test":"public launch"}</div></div><div class="actions"><span class="badge ${d.health_status==="degraded"?"danger":d.health_status==="healthy"?"success":""}">Health ${esc(d.health_status||"unknown")}</span><span class="badge ${d.public_route_status==="verified"?"success":d.public_route_status==="failed"?"danger":"warn"}">Route ${esc(d.public_route_status||"unknown")}</span><span class="badge">Platform ${esc(d.platform_version||"unknown")}</span></div></div><div class="grid"><div class="card"><div class="label">Current message</div><strong id="live-message">${esc(d.status_message)}</strong></div><div class="card"><div class="label">Template</div><div class="value">${esc(d.template_version)}</div></div><div class="card"><div class="label">Provision time</div><div class="stat">${secs(d)?fmtSec(secs(d)):"Running…"}</div></div><div class="card"><div class="label">Last successful stage</div><div class="value">${esc((x.events.filter(e=>e.level!=="error").slice(-1)[0]||{}).stage||"queued")}</div></div></div><div class="actions">${d.status==="running"?`<a class="btn" target="_blank" href="${esc(d.url)}">Open Site</a><button class="btn secondary" onclick="openAdmin()">One-click Admin</button><form method="post" action="/manage/demos/${d.id}/reset" onsubmit="return confirm('Reset this demo back to the current golden snapshot? All changes in the demo will be lost.')"><button class="btn secondary">Reset Demo</button></form><form method="post" action="/manage/demos/${d.id}/extend"><button class="btn secondary">Extend +30m</button></form>`:""}<button class="btn secondary" onclick="refreshLive()">Refresh Logs</button><button class="btn secondary" onclick="copyDiagnostic()">Copy Diagnostic Log</button><a class="btn secondary" href="/manage/demos/${esc(d.id)}/diagnostic" target="_blank">Open Diagnostic .txt</a>${d.status==="failed"&&d.container_id?`<form method="post" action="/manage/demos/${d.id}/retry-finalisation"><button class="btn secondary">Retry Finalisation</button></form>`:""}<form method="post" action="/manage/demos/${d.id}/destroy" onsubmit="return confirm('Destroy this demo and its database? This cannot be undone.')"><button class="btn red">Destroy</button></form></div><h2>Provisioning performance</h2><div class="card">${tm.map(v=>`<div class="barrow"><span>${v.label}</span><div class="bar"><i style="width:${Math.round(v.ms/mx*100)}%"></i></div><strong>${(v.ms/1000).toFixed(2)}s</strong></div>`).join("")}</div><h2>Live Provisioning Timeline</h2><div class="tablewrap"><table><thead><tr><th>Time</th><th>Stage</th><th>Level</th><th>Message</th></tr></thead><tbody id="events">${events||'<tr><td colspan="4">No events recorded yet.</td></tr>'}</tbody></table></div><h2>MariaDB Live Logs</h2><div class="log" id="db-logs">${esc(x.dbLogs||"No database logs available yet.")}</div><h2>WordPress Live Logs</h2><div class="log" id="wp-logs">${esc(x.wpLogs||"WordPress container has not started yet.")}</div>${d.error_message?`<h2>Failure</h2><div class="notice"><strong>Stage:</strong> ${esc(d.provision_stage)}<br><strong>Reason:</strong> ${esc(d.error_message)}<br><strong>Duration:</strong> ${secs(d)?fmtSec(secs(d)):"in progress"}</div>`:""}${d.public_route_last_error?`<h2>Public Route Diagnostic</h2><div class="notice"><strong>Status:</strong> ${esc(d.public_route_status||"unknown")}<br><strong>Launcher result:</strong> ${esc(d.public_route_last_error)}<br><span class="muted">This can be a Docker DNS/hairpin limitation even when the demo works externally.</span></div>`:""}${d.degraded_logs?`<h2>Captured Degradation Logs</h2><div class="notice">A post-ready health check failed and the WordPress log tail was captured automatically.</div><div class="log">${esc(d.degraded_logs)}</div>`:""}<script>
+r.get("/demos/:id",async(req,res)=>{const x=await live(req.params.id);if(!x)return res.status(404).send(adminPage("Demo not found",`<div class="crumb"><a href="/manage/demos">← Demos</a></div><h1>Demo not found.</h1><p class="muted">That demo record does not exist.</p><div class="actions"><a class="btn" href="/manage/demos">Back to Demos</a></div>`,"demos"));const d=x.demo,tm=stats([d]),mx=Math.max(1,...tm.map(v=>v.ms)),events=x.events.map(e=>`<tr><td>${new Date(e.created_at_ms||e.created_at*1000).toLocaleTimeString()}</td><td>${esc(e.stage)}</td><td>${esc(e.level)}</td><td>${esc(e.message)}</td></tr>`).join(""),auto=["queued","provisioning","resetting"].includes(d.status);res.send(adminPage("Demo Detail",`<div class="crumb"><a href="/manage/demos">← Back to Demos</a> / ${esc(d.id)}</div><div class="kpirow"><div><h1>${esc(d.id)}</h1><div class="sub"><span id="live-status" class="${cls(d.status)}">${esc(d.status)}</span> · <span id="live-stage">${esc(d.provision_stage)}</span> · ${d.demo_type==="admin_test"?"administrator test":"public launch"}</div></div><div class="actions"><span class="badge ${d.health_status==="degraded"?"danger":d.health_status==="healthy"?"success":""}">Health ${esc(d.health_status||"unknown")}</span><span class="badge ${d.public_route_status==="verified"?"success":d.public_route_status==="failed"?"danger":"warn"}">Route ${esc(d.public_route_status||"unknown")}</span><span class="badge">Platform ${esc(d.platform_version||"unknown")}</span></div></div><div class="grid"><div class="card"><div class="label">Current message</div><strong id="live-message">${esc(d.status_message)}</strong></div><div class="card"><div class="label">Template</div><div class="value">${esc(d.template_version)}</div></div><div class="card"><div class="label">Provision time</div><div class="stat">${secs(d)?fmtSec(secs(d)):"Running…"}</div></div><div class="card"><div class="label">Last successful stage</div><div class="value">${esc((x.events.filter(e=>e.level!=="error").slice(-1)[0]||{}).stage||"queued")}</div></div></div><div class="actions">${d.status==="running"?`<a class="btn" target="_blank" rel="noopener" href="${esc(d.url)}">Open Site</a><button class="btn secondary" onclick="openAdmin()">One-click Admin</button><form method="post" action="/manage/demos/${d.id}/reset" onsubmit="return confirm('Reset this demo back to the current golden snapshot? All changes in the demo will be lost.')"><button class="btn secondary">Reset Demo</button></form><form method="post" action="/manage/demos/${d.id}/extend"><button class="btn secondary">Extend +30m</button></form>`:""}<button class="btn secondary" onclick="refreshLive()">Refresh Logs</button><button class="btn secondary" onclick="copyDiagnostic()">Copy Diagnostic Log</button><a class="btn secondary" href="/manage/demos/${esc(d.id)}/diagnostic" target="_blank" rel="noopener">Open Diagnostic .txt</a>${d.status==="failed"&&d.container_id?`<form method="post" action="/manage/demos/${d.id}/retry-finalisation"><button class="btn secondary">Retry Finalisation</button></form>`:""}<form method="post" action="/manage/demos/${d.id}/destroy" onsubmit="return confirm('Destroy this demo and its database? This cannot be undone.')"><button class="btn red">Destroy</button></form></div><h2>Provisioning performance</h2><div class="card">${tm.map(v=>`<div class="barrow"><span>${v.label}</span><div class="bar"><i style="width:${Math.round(v.ms/mx*100)}%"></i></div><strong>${(v.ms/1000).toFixed(2)}s</strong></div>`).join("")}</div><h2>Live Provisioning Timeline</h2><div class="tablewrap"><table><thead><tr><th>Time</th><th>Stage</th><th>Level</th><th>Message</th></tr></thead><tbody id="events">${events||'<tr><td colspan="4">No events recorded yet.</td></tr>'}</tbody></table></div><h2>MariaDB Live Logs</h2><div class="log" id="db-logs">${esc(x.dbLogs||"No database logs available yet.")}</div><h2>WordPress Live Logs</h2><div class="log" id="wp-logs">${esc(x.wpLogs||"WordPress container has not started yet.")}</div>${d.error_message?`<h2>Failure</h2><div class="notice"><strong>Stage:</strong> ${esc(d.provision_stage)}<br><strong>Reason:</strong> ${esc(d.error_message)}<br><strong>Duration:</strong> ${secs(d)?fmtSec(secs(d)):"in progress"}</div>`:""}${d.public_route_last_error?`<h2>Public Route Diagnostic</h2><div class="notice"><strong>Status:</strong> ${esc(d.public_route_status||"unknown")}<br><strong>Launcher result:</strong> ${esc(d.public_route_last_error)}<br><span class="muted">This can be a Docker DNS/hairpin limitation even when the demo works externally.</span></div>`:""}${d.degraded_logs?`<h2>Captured Degradation Logs</h2><div class="notice">A post-ready health check failed and the WordPress log tail was captured automatically.</div><div class="log">${esc(d.degraded_logs)}</div>`:""}<script>
 async function openAdmin(){
+ const w=window.open('about:blank','_blank');
  try{
    const r=await fetch('/api/demo-tools/login-token',{
      method:'POST',
@@ -109,9 +110,9 @@ async function openAdmin(){
      body:JSON.stringify({demo:'${esc(d.id)}'})
    });
    const x=await r.json();
-   if(x.url)window.open(x.url,'_blank');
-   else alert('Unable to create one-click login.');
- }catch(e){alert('Unable to create one-click login.');}
+   if(x.url){if(w){w.opener=null;w.location=x.url}else window.open(x.url,'_blank','noopener')}
+   else{if(w)w.close();alert('Unable to create one-click login.');}
+ }catch(e){if(w)w.close();alert('Unable to create one-click login.');}
 }
 async function copyDiagnostic(){try{const r=await fetch('/manage/demos/${esc(d.id)}/diagnostic',{cache:'no-store'}),t=await r.text();await navigator.clipboard.writeText(t);alert('Diagnostic log copied.')}catch(e){window.open('/manage/demos/${esc(d.id)}/diagnostic','_blank')}}async function refreshLive(){try{const r=await fetch('/manage/demos/${esc(d.id)}/live',{cache:'no-store'}),q=await r.json();document.getElementById('live-status').textContent=q.status;document.getElementById('live-stage').textContent=q.stage;document.getElementById('live-message').textContent=q.message||'';document.getElementById('db-logs').textContent=q.dbLogs||'No database logs available yet.';document.getElementById('wp-logs').textContent=q.wpLogs||'WordPress container has not started yet.';document.getElementById('events').innerHTML=q.eventsHtml||'<tr><td colspan="4">No events recorded yet.</td></tr>';if(['queued','provisioning','resetting'].includes(q.status))setTimeout(refreshLive,2000)}catch(e){setTimeout(refreshLive,4000)}}${auto?"setTimeout(refreshLive,1200);":""}</script>`,"demos"))});
 r.get("/demos/:id/live",async(req,res)=>{const x=await live(req.params.id);if(!x)return res.status(404).json({error:"not found"});const d=x.demo;res.set("Cache-Control","no-store");res.json({status:d.status,stage:d.provision_stage,message:d.status_message,error:d.error_message,eventsHtml:x.events.map(e=>`<tr><td>${new Date(e.created_at_ms||e.created_at*1000).toLocaleTimeString()}</td><td>${esc(e.stage)}</td><td>${esc(e.level)}</td><td>${esc(e.message)}</td></tr>`).join(""),wpLogs:x.wpLogs,dbLogs:x.dbLogs})});
@@ -338,25 +339,100 @@ r.get("/analytics",(req,res)=>{const rows=db.prepare("SELECT * FROM demos WHERE 
 r.get("/profile",(req,res)=>{
  const p=profile.load();
  res.send(adminPage("Profile",`
- <div class="kpirow"><div><h1>Demo Profile</h1><div class="sub">Edit product-specific configuration without touching code.</div></div><a class="btn secondary" href="/manage/setup">Run Setup Wizard</a></div>
+ <div class="kpirow"><div><h1>Demo Profile</h1><div class="sub">Edit the product configuration used by Setup and the public launcher.</div></div><a class="btn secondary" href="/manage/setup?step=5">Configuration Check</a></div>
  <form method="post" action="/manage/profile">
  <div class="grid">
-  <div class="card"><h2 style="margin-top:0">Identity</h2><label>Product name<input name="productName" value="${esc(p.productName)}"></label><label>Company name<input name="companyName" value="${esc(p.companyName)}"></label><label>Homepage URL<input name="homepageUrl" value="${esc(p.homepageUrl)}"></label></div>
-  <div class="card"><h2 style="margin-top:0">Domains</h2><label>Launcher domain<input name="launcherDomain" value="${esc(p.launcherDomain)}"></label><label>Template domain<input name="templateDomain" value="${esc(p.templateDomain)}"></label></div>
-  <div class="card"><h2 style="margin-top:0">Branding</h2><label>Logo URL<input name="logoUrl" value="${esc((p.branding||{}).logoUrl||"")}"></label><label>Favicon URL<input name="faviconUrl" value="${esc((p.branding||{}).faviconUrl||"")}"></label><label>Accent<input type="color" name="accent" value="${esc((p.branding||{}).accent||"#ffffff")}"></label></div>
+  <div class="card"><h2 style="margin-top:0">Identity</h2>
+   <label>Product name<input name="productName" required minlength="2" maxlength="80" value="${esc(p.productName)}"></label>
+   <label>Company name<input name="companyName" required minlength="2" maxlength="80" value="${esc(p.companyName)}"></label>
+   <label>Homepage URL<input type="url" name="homepageUrl" required value="${esc(p.homepageUrl)}"></label>
+  </div>
+  <div class="card"><h2 style="margin-top:0">Domains</h2>
+   <label>Launcher domain<input name="launcherDomain" required pattern="[A-Za-z0-9.-]+\\.[A-Za-z]{2,}" value="${esc(p.launcherDomain)}"><span class="fieldhint">Hostname only.</span></label>
+   <label>Template domain<input name="templateDomain" required pattern="[A-Za-z0-9.-]+\\.[A-Za-z]{2,}" value="${esc(p.templateDomain)}"><span class="fieldhint">Hostname only.</span></label>
+  </div>
+  <div class="card"><h2 style="margin-top:0">Branding</h2>
+   <label>Logo URL<input type="url" name="logoUrl" value="${esc((p.branding||{}).logoUrl||"")}"></label>
+   <label>Favicon URL<input type="url" name="faviconUrl" value="${esc((p.branding||{}).faviconUrl||"")}"></label>
+   <label>Accent<input type="color" name="accent" value="${esc((p.branding||{}).accent||"#ffffff")}"></label>
+  </div>
  </div>
- <div class="card" style="margin-top:15px"><h2 style="margin-top:0">Public copy</h2><label>Tagline<textarea name="tagline">${esc(p.tagline||"")}</textarea></label><label>Launch heading<input name="launchHeading" value="${esc(p.launchHeading||"")}"></label><label>Launch description<textarea name="launchDescription">${esc(p.launchDescription||"")}</textarea></label><label>Ready heading<input name="readyHeading" value="${esc(p.readyHeading||"")}"></label></div>
- <div class="card" style="margin-top:15px"><h2 style="margin-top:0">Required components</h2><label>Required plugin files (one per line)<textarea name="requiredPlugins" rows="7">${esc((p.requiredPlugins||[]).join("\\n"))}</textarea></label><label>Required theme<input name="requiredTheme" value="${esc(p.requiredTheme||"")}"></label></div>
- <div class="actions"><button class="btn">Save Profile</button><a class="btn secondary" href="/manage/setup?step=5">Readiness Checks</a></div>
+ <div class="card" style="margin-top:15px"><h2 style="margin-top:0">Public copy</h2>
+  <label>Tagline<textarea name="tagline" required minlength="8" maxlength="220">${esc(p.tagline||"")}</textarea></label>
+  <label>Launch heading<input name="launchHeading" required minlength="4" maxlength="100" value="${esc(p.launchHeading||"")}"></label>
+  <label>Launch description<textarea name="launchDescription" required minlength="12" maxlength="320">${esc(p.launchDescription||"")}</textarea></label>
+  <label>Ready heading<input name="readyHeading" required minlength="4" maxlength="100" value="${esc(p.readyHeading||"")}"></label>
+ </div>
+ <div class="card" style="margin-top:15px"><h2 style="margin-top:0">Required components</h2>
+  <label>Required plugin files (one per line)<textarea name="requiredPlugins" rows="7">${esc((p.requiredPlugins||[]).join("\\n"))}</textarea><span class="fieldhint">Setup → Product stack is safer because it only permits active components.</span></label>
+  <label>Required theme<input name="requiredTheme" value="${esc(p.requiredTheme||"")}"><span class="fieldhint">Must match the active stylesheet slug on the golden template.</span></label>
+ </div>
+ <div class="actions"><button type="submit" class="btn">Save Profile</button><a class="btn secondary" href="/manage/setup?step=4">Choose Components</a></div>
  </form>`,"profile"));
 });
+
 r.post("/profile",(req,res)=>{
  const p=profile.load();
- const clean=v=>String(v||"").trim().replace("https://","").replace("http://","").split("/")[0];
- const plugins=String(req.body.requiredPlugins||"").split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean);
+ const clean=v=>String(v||"").trim().replace(/^https?:\/\//i,"").split("/")[0].toLowerCase();
+ const productName=String(req.body.productName||"").trim(),companyName=String(req.body.companyName||"").trim(),homepageUrl=String(req.body.homepageUrl||"").trim();
+ const launcherDomain=clean(req.body.launcherDomain),templateDomain=clean(req.body.templateDomain);
+ const tagline=String(req.body.tagline||"").trim(),launchHeading=String(req.body.launchHeading||"").trim(),launchDescription=String(req.body.launchDescription||"").trim(),readyHeading=String(req.body.readyHeading||"").trim();
+ const plugins=String(req.body.requiredPlugins||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  const theme=String(req.body.requiredTheme||"").trim();
- profile.save({...p,productName:String(req.body.productName||"").trim(),companyName:String(req.body.companyName||"").trim(),homepageUrl:String(req.body.homepageUrl||"").trim(),launcherDomain:clean(req.body.launcherDomain),templateDomain:clean(req.body.templateDomain),tagline:String(req.body.tagline||"").trim(),launchHeading:String(req.body.launchHeading||"").trim(),launchDescription:String(req.body.launchDescription||"").trim(),readyHeading:String(req.body.readyHeading||"").trim(),requiredPlugins:plugins,allowedPlugins:plugins,requiredTheme:theme,allowedThemes:theme?[theme]:[],branding:{...(p.branding||{}),logoUrl:String(req.body.logoUrl||"").trim(),faviconUrl:String(req.body.faviconUrl||"").trim(),accent:String(req.body.accent||"#ffffff").trim()}});
+ const validUrl=v=>{try{const u=new URL(v);return ["http:","https:"].includes(u.protocol)&&u.hostname}catch(_){return false}};
+ const validHost=v=>/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(v);
+ if(productName.length<2||companyName.length<2||!validUrl(homepageUrl)||!validHost(launcherDomain)||!validHost(templateDomain)||launcherDomain===templateDomain||tagline.length<8||launchHeading.length<4||launchDescription.length<12||readyHeading.length<4){
+   return res.redirect("/manage/profile?error="+encodeURIComponent("Please correct the highlighted profile fields."));
+ }
+ profile.save({...p,productName,companyName,homepageUrl,launcherDomain,templateDomain,tagline,launchHeading,launchDescription,readyHeading,requiredPlugins:plugins,allowedPlugins:plugins,requiredTheme:theme,allowedThemes:theme?[theme]:[],branding:{...(p.branding||{}),logoUrl:String(req.body.logoUrl||"").trim(),faviconUrl:String(req.body.faviconUrl||"").trim(),accent:String(req.body.accent||"#ffffff").trim()}});
  audit("profile_update",null,"DemoPress product profile updated");
- res.redirect("/manage/profile");
+ res.redirect("/manage/profile?saved="+encodeURIComponent("Profile saved"));
 });
-r.get("/settings",(req,res)=>{const s=settings.all();res.send(adminPage("Settings",`<h1>Settings</h1><div class="sub">Operational settings; secrets stay in Coolify.</div><form method="post"><div class="formgrid"><label>Idle lifetime<input name="idle_lifetime" value="${esc(s.idle_lifetime)}"></label><label>Maximum lifetime<input name="max_lifetime" value="${esc(s.max_lifetime)}"></label><label>Maximum active demos<input name="max_active_demos" value="${esc(s.max_active_demos)}"></label><label>Failed retention<input name="failed_retention" value="${esc(s.failed_retention)}"></label><label>Maintenance<select name="maintenance_mode"><option value="0" ${s.maintenance_mode==="0"?"selected":""}>Launches enabled</option><option value="1" ${s.maintenance_mode==="1"?"selected":""}>Maintenance</option></select></label></div><div class="actions"><button class="btn">Save</button></div></form>`,"settings"))});r.post("/settings",(req,res)=>{for(const k of ["idle_lifetime","max_lifetime","max_active_demos","failed_retention","maintenance_mode"])if(req.body[k]!=null)settings.set(k,req.body[k]);res.redirect("/manage/settings")});r.use((req,res)=>res.status(404).send(adminPage("Not found",`<div class="crumb"><a href="/manage">← Dashboard</a></div><h1>Page not found.</h1><p class="muted">That DemoPress Manager page does not exist.</p><div class="actions"><a class="btn" href="/manage">Dashboard</a></div>`,"overview")));module.exports=r;
+
+r.get("/settings",(req,res)=>{
+ const s=settings.all();
+ const sec=v=>Number(v)||0;
+ const human=v=>{const n=sec(v);if(n%3600===0)return `${n/3600} hour${n===3600?"":"s"}`;if(n%60===0)return `${n/60} minutes`;return `${n} seconds`};
+ res.send(adminPage("Settings",`
+ <div class="kpirow"><div><h1>Settings</h1><div class="sub">Operational defaults stored in DemoPress. Deployment secrets remain in Coolify.</div></div><a class="btn secondary" href="/manage/setup?step=5">Configuration Check</a></div>
+ <form method="post" action="/manage/settings">
+  <div class="grid">
+   <div class="card"><h2 style="margin-top:0">Demo lifetime</h2>
+    <label>Idle lifetime (seconds)<input type="number" name="idle_lifetime" min="60" max="86400" step="60" required value="${esc(s.idle_lifetime)}"><span class="fieldhint">Current: ${esc(human(s.idle_lifetime))}. Demo expires after this period of inactivity.</span></label>
+    <label>Maximum lifetime (seconds)<input type="number" name="max_lifetime" min="300" max="604800" step="60" required value="${esc(s.max_lifetime)}"><span class="fieldhint">Current: ${esc(human(s.max_lifetime))}. Hard maximum regardless of activity.</span></label>
+   </div>
+   <div class="card"><h2 style="margin-top:0">Capacity</h2>
+    <label>Maximum active demos<input type="number" name="max_active_demos" min="1" max="100" step="1" required value="${esc(s.max_active_demos)}"><span class="fieldhint">Global concurrent demo limit.</span></label>
+    <label>Failed-demo retention (seconds)<input type="number" name="failed_retention" min="60" max="86400" step="60" required value="${esc(s.failed_retention)}"><span class="fieldhint">Current: ${esc(human(s.failed_retention))}. Keeps failed records/containers available for diagnostics before cleanup.</span></label>
+   </div>
+   <div class="card"><h2 style="margin-top:0">Availability</h2>
+    <label>Launch mode<select name="maintenance_mode"><option value="0" ${s.maintenance_mode==="0"?"selected":""}>Launches enabled</option><option value="1" ${s.maintenance_mode==="1"?"selected":""}>Maintenance mode</option></select><span class="fieldhint">Maintenance prevents new public launches without taking Manager offline.</span></label>
+    <div class="notice"><strong>Secrets and infrastructure</strong><br>ADMIN_PASSWORD, INTERNAL_TEMPLATE_TOKEN, Docker networking, image name and storage paths should stay in Coolify environment variables.</div>
+   </div>
+  </div>
+  <div class="actions"><button type="submit" class="btn">Save Settings</button></div>
+ </form>`,"settings"));
+});
+
+r.post("/settings",(req,res)=>{
+ const numeric={
+  idle_lifetime:[60,86400],
+  max_lifetime:[300,604800],
+  max_active_demos:[1,100],
+  failed_retention:[60,86400]
+ };
+ const vals={};
+ for(const [k,[min,max]] of Object.entries(numeric)){
+   const n=Number(req.body[k]);
+   if(!Number.isFinite(n)||n<min||n>max)return res.redirect("/manage/settings?error="+encodeURIComponent(`Invalid ${k.replaceAll("_"," ")} value.`));
+   vals[k]=Math.floor(n);
+ }
+ if(vals.max_lifetime<vals.idle_lifetime)return res.redirect("/manage/settings?error="+encodeURIComponent("Maximum lifetime must be equal to or greater than idle lifetime."));
+ const maintenance=req.body.maintenance_mode==="1"?"1":"0";
+ for(const [k,v] of Object.entries(vals))settings.set(k,v);
+ settings.set("maintenance_mode",maintenance);
+ audit("settings_update",null,`Operational settings updated: idle=${vals.idle_lifetime}s max=${vals.max_lifetime}s active=${vals.max_active_demos}`);
+ res.redirect("/manage/settings?saved="+encodeURIComponent("Operational settings saved"));
+});
+
+r.use((req,res)=>res.status(404).send(adminPage("Not found",`<div class="crumb"><a href="/manage">← Dashboard</a></div><h1>Page not found.</h1><p class="muted">That DemoPress Manager page does not exist.</p><div class="actions"><a class="btn" href="/manage">Dashboard</a></div>`,"overview")));module.exports=r;
