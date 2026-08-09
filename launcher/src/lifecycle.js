@@ -1,5 +1,6 @@
 const db=require("./database");
 const docker=require("./docker");
+const actions=require("./docker-actions");
 const settings=require("./settings");
 const config=require("./config");
 
@@ -23,9 +24,28 @@ async function removeVolumesForDemo(demoId){
   }catch(_){}
 }
 
-async function destroy(id){
+async function destroy(id,reason="manual"){
   const d=db.prepare("SELECT * FROM demos WHERE id=?").get(id);
   if(!d)return false;
+
+  let wpLogs=d.archived_wp_logs||"";
+  let dbLogs=d.archived_db_logs||"";
+
+  if(d.container_id){
+    try{wpLogs=await actions.logs(docker.getContainer(d.container_id),500)}catch(_){}
+  }
+  if(d.db_container_id){
+    try{dbLogs=await actions.logs(docker.getContainer(d.db_container_id),500)}catch(_){}
+  }
+
+  db.prepare(`
+    UPDATE demos
+    SET archived_wp_logs=?,
+        archived_db_logs=?,
+        deleted_at=?,
+        delete_reason=?
+    WHERE id=?
+  `).run(wpLogs||"",dbLogs||"",Math.floor(Date.now()/1000),reason,id);
 
   await removeContainer(d.container_id);
   await removeContainer(d.db_container_id);
@@ -35,9 +55,14 @@ async function destroy(id){
     UPDATE demos
     SET status='deleted',
         provision_stage='deleted',
-        status_message='Demo removed'
+        status_message=?
     WHERE id=?
-  `).run(id);
+  `).run(
+    reason==="expired"?"Demo expired and was removed":
+    reason==="failed_retention"?"Failed demo removed after retention period":
+    "Demo removed",
+    id
+  );
 
   return true;
 }
@@ -52,7 +77,7 @@ async function cleanup(){
   `).all(now,now);
 
   for(const d of expired){
-    await destroy(d.id);
+    await destroy(d.id,"expired");
   }
 
   const failedCutoff=now-settings.number("failed_retention",config.failedRetention);
@@ -63,7 +88,7 @@ async function cleanup(){
   `).all(failedCutoff);
 
   for(const d of failed){
-    await destroy(d.id);
+    await destroy(d.id,"failed_retention");
   }
 }
 

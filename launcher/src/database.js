@@ -37,7 +37,11 @@ CREATE TABLE IF NOT EXISTS demos(
  demo_image_id TEXT,
  degraded_logs TEXT,
  public_route_status TEXT NOT NULL DEFAULT 'unknown',
- public_route_last_error TEXT
+ public_route_last_error TEXT,
+ archived_wp_logs TEXT,
+ archived_db_logs TEXT,
+ deleted_at INTEGER,
+ delete_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS settings(
@@ -117,6 +121,10 @@ ensureColumn("demos","platform_version","TEXT NOT NULL DEFAULT 'unknown'");
 ensureColumn("demos","degraded_logs","TEXT");
 ensureColumn("demos","public_route_status","TEXT NOT NULL DEFAULT 'unknown'");
 ensureColumn("demos","public_route_last_error","TEXT");
+ensureColumn("demos","archived_wp_logs","TEXT");
+ensureColumn("demos","archived_db_logs","TEXT");
+ensureColumn("demos","deleted_at","INTEGER");
+ensureColumn("demos","delete_reason","TEXT");
 ensureColumn("demos","demo_image_id","TEXT");
 ensureColumn("demos","health_failures","INTEGER NOT NULL DEFAULT 0");
 ensureColumn("demos","last_health_at","INTEGER");

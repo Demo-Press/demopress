@@ -1,4 +1,4 @@
-const n=(k,f)=>{const v=Number(process.env[k]);return Number.isFinite(v)?v:f;};
+const n=(k,f)=>{const raw=process.env[k];if(raw===undefined||raw===null||String(raw).trim()==="")return f;const v=Number(raw);return Number.isFinite(v)?v:f;};
 module.exports={
  githubUrl:process.env.GITHUB_URL||"https://github.com/your-org/demopress",
  buildVersion:"1.0-rc",
