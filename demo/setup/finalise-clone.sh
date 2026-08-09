@@ -1,4 +1,3 @@
-\
 #!/bin/bash
 set -euo pipefail
 cd /var/www/html

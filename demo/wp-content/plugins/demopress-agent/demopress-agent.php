@@ -1,4 +1,3 @@
-\
 <?php
 /*
 Plugin Name: DemoPress Agent
