@@ -5,7 +5,6 @@ services:
       dockerfile: launcher/Dockerfile
     restart: unless-stopped
     environment:
-      PORT: "3000"
       DOMAIN: ${DOMAIN}
       TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
       DEMOPRESS_THEME: ${DEMOPRESS_THEME:-default}
