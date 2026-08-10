@@ -1,0 +1,7 @@
+{
+  "name": "demopress",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Disposable branded WordPress demo platform",
+  "license": "MIT"
+}

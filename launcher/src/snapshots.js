@@ -1,48 +1,9 @@
-const profile=require("./profile");const fs=require("fs");const path=require("path");const config=require("./config");const db=require("./database");const {token}=require("./helpers");
-fs.mkdirSync(config.snapshotRoot,{recursive:true});
-function current(){return db.prepare("SELECT * FROM snapshots WHERE is_current=1 ORDER BY created_at DESC LIMIT 1").get();}
-function list(){return db.prepare("SELECT * FROM snapshots ORDER BY created_at DESC").all();}
-function setCurrent(version){db.prepare("UPDATE snapshots SET is_current=0").run();db.prepare("UPDATE snapshots SET is_current=1 WHERE version=?").run(version);}
-function remove(version){
- const s=db.prepare("SELECT * FROM snapshots WHERE version=?").get(version);if(!s||s.is_current)return false;
- fs.rmSync(s.path,{recursive:true,force:true});db.prepare("DELETE FROM snapshots WHERE version=?").run(version);return true;
-}
-async function fetchTemplate(endpoint,method="GET",body=null){
- const url=`https://${config.templateDomain}/wp-json/demopress-agent/v1/${endpoint}`;
- const opts={method,headers:{"X-DemoPress-Template-Token":config.templateToken}};
- if(body){opts.headers["Content-Type"]="application/json";opts.body=JSON.stringify(body);}
- const r=await fetch(url,opts);if(!r.ok)throw new Error(`Template API ${endpoint} failed (${r.status})`);
- return r;
-}
-async function validate(){
- const inventory=await (await fetchTemplate("status")).json();
- const active=new Set((inventory.plugins||[]).filter(p=>p.active).map(p=>p.file));
- const checks={
-   template_mode:inventory.mode==="template",
-   wordpress:Boolean(inventory.wordpress),
-   required_plugins:(profile.requiredPlugins||[]).every(p=>active.has(p)),
-   required_theme:!profile.requiredTheme||inventory.activeTheme===profile.requiredTheme,
-   db:Boolean(inventory.db)
- };
- return {ok:!Object.values(checks).includes(false),checks,inventory,profile:{productName:profile.productName,requiredPlugins:profile.requiredPlugins,requiredTheme:profile.requiredTheme}};
-}
-async function status(){return (await fetchTemplate("status")).json();}
-async function publish(){
- const validation=await validate();if(!validation.ok)throw new Error("Template validation failed");
- const stamp=new Date().toISOString().replace(/[-:]/g,"").replace(/\..+/,"").replace("T",".");
- const version=`${stamp}`;
- const dest=path.join(config.snapshotRoot,version);fs.mkdirSync(dest,{recursive:true});
- const r=await fetchTemplate("export","POST",{version});
- const payload=await r.json();
- if(!payload.ok||!payload.database_b64)throw new Error("Template export returned no database");
- fs.writeFileSync(path.join(dest,"database.sql"),Buffer.from(payload.database_b64,"base64"));
- if(payload.uploads_b64)fs.writeFileSync(path.join(dest,"uploads.tar.gz"),Buffer.from(payload.uploads_b64,"base64"));if(payload.content_b64)fs.writeFileSync(path.join(dest,"content.tar.gz"),Buffer.from(payload.content_b64,"base64"));
- const manifest={version,createdAt:Date.now(),template:payload.manifest||{},validation};
- fs.writeFileSync(path.join(dest,"manifest.json"),JSON.stringify(manifest,null,2));
- const size=["database.sql","uploads.tar.gz","content.tar.gz"].reduce((n,f)=>{try{return n+fs.statSync(path.join(dest,f)).size}catch(_){return n}},0);
- db.prepare("INSERT INTO snapshots(version,created_at,path,size_bytes,is_current,manifest_json) VALUES(?,?,?,?,0,?)").run(version,Math.floor(Date.now()/1000),dest,size,JSON.stringify(manifest));
- setCurrent(version);
- const rows=list();for(const s of rows.slice(config.maxSnapshots)){if(!s.is_current)remove(s.version);}
- return db.prepare("SELECT * FROM snapshots WHERE version=?").get(version);
-}
+const fs=require("fs"),path=require("path"),{Readable}=require("stream"),{pipeline}=require("stream/promises");const config=require("./config"),db=require("./database"),profile=require("./profile");fs.mkdirSync(config.snapshotRoot,{recursive:true});
+function current(){return db.prepare("SELECT * FROM snapshots WHERE is_current=1 ORDER BY created_at DESC LIMIT 1").get()}function list(){return db.prepare("SELECT * FROM snapshots ORDER BY created_at DESC").all()}function setCurrent(v){const t=db.transaction(()=>{db.prepare("UPDATE snapshots SET is_current=0").run();db.prepare("UPDATE snapshots SET is_current=1 WHERE version=?").run(v)});t()}function remove(v){const s=db.prepare("SELECT * FROM snapshots WHERE version=?").get(v);if(!s||s.is_current)return false;fs.rmSync(s.path,{recursive:true,force:true});db.prepare("DELETE FROM snapshots WHERE version=?").run(v);return true}
+const headers=()=>({"X-DemoPress-Template-Token":config.templateToken});async function api(ep){const r=await fetch(`https://${config.templateDomain}/wp-json/demopress-agent/v1/${ep}`,{headers:headers(),signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error(`Template API ${ep} failed (${r.status}): ${(await r.text()).slice(0,500)}`);return r.json()}
+async function validate(){const inv=await api("status"),active=new Set((inv.plugins||[]).filter(p=>p.active).map(p=>p.file));const checks={template_mode:inv.mode==="template",wordpress:!!inv.wordpress,export_protocol:Number(inv.exportProtocol||0)>=2,required_plugins:(profile.requiredPlugins||[]).every(x=>active.has(x)),required_theme:!profile.requiredTheme||inv.activeTheme===profile.requiredTheme,db:!!inv.db};return{ok:!Object.values(checks).includes(false),checks,inventory:inv,profile:{productName:profile.productName,requiredPlugins:profile.requiredPlugins||[],requiredTheme:profile.requiredTheme||""}}}
+async function status(){return api("status")}
+async function dl(type,dest,required=true){const r=await fetch(`https://${config.templateDomain}/?demopress_export=${encodeURIComponent(type)}`,{headers:headers(),redirect:"follow",signal:AbortSignal.timeout(900000)});if(r.status===204&&!required)return{present:false,bytes:0};if(!r.ok)throw new Error(`Template ${type} export failed (${r.status}): ${(await r.text()).slice(0,500)}`);const part=dest+".part";await pipeline(Readable.fromWeb(r.body),fs.createWriteStream(part));const st=fs.statSync(part);if(!st.size)throw new Error(`${type} export empty`);fs.renameSync(part,dest);return{present:true,bytes:st.size}}
+function version(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}.${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`}
+async function publish(){const validation=await validate();if(!validation.ok)throw new Error(`Template validation failed: ${JSON.stringify(validation.checks)}`);const v=version(),dest=path.join(config.snapshotRoot,v);fs.mkdirSync(dest,{recursive:true});try{const database=await dl("database",path.join(dest,"database.sql"),true),content=await dl("content",path.join(dest,"content.tar.gz"),true),uploads=await dl("uploads",path.join(dest,"uploads.tar.gz"),false);const manifest={version:v,createdAt:Date.now(),exportProtocol:2,validation,template:validation.inventory,files:{database,content,uploads}};fs.writeFileSync(path.join(dest,"manifest.json"),JSON.stringify(manifest,null,2));const size=database.bytes+content.bytes+uploads.bytes;db.prepare("INSERT INTO snapshots(version,created_at,path,size_bytes,is_current,manifest_json) VALUES(?,?,?,?,0,?)").run(v,Math.floor(Date.now()/1000),dest,size,JSON.stringify(manifest));setCurrent(v);for(const s of list().slice(config.maxSnapshots))if(!s.is_current)remove(s.version);return db.prepare("SELECT * FROM snapshots WHERE version=?").get(v)}catch(e){fs.rmSync(dest,{recursive:true,force:true});throw e}}
 module.exports={current,list,setCurrent,remove,validate,status,publish};

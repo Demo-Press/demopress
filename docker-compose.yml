@@ -1,40 +1,76 @@
 services:
   launcher:
     build:
-      context: ./launcher
+      context: .
+      dockerfile: launcher/Dockerfile
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
     environment:
+      PORT: "3000"
       DOMAIN: ${DOMAIN}
       TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
-      DEFAULT_DEMO_LIFETIME: ${DEFAULT_DEMO_LIFETIME}
-      MAX_DEMO_LIFETIME: ${MAX_DEMO_LIFETIME}
-      FAILED_RETENTION: ${FAILED_RETENTION}
-      MAX_ACTIVE_DEMOS: ${MAX_ACTIVE_DEMOS}
-      MAX_ACTIVE_DEMOS_PER_IP: ${MAX_ACTIVE_DEMOS_PER_IP}
-      MAX_LAUNCHES_PER_IP_PER_HOUR: ${MAX_LAUNCHES_PER_IP_PER_HOUR}
-      MIN_FREE_MEMORY_MB: ${MIN_FREE_MEMORY_MB}
-      SQLITE_PATH: ${SQLITE_PATH}
-      DOCKER_SOCKET: ${DOCKER_SOCKET}
-      COOLIFY_NETWORK: ${COOLIFY_NETWORK}
-      TRAEFIK_ENTRYPOINTS: ${TRAEFIK_ENTRYPOINTS}
-      TRAEFIK_CERTRESOLVER: ${TRAEFIK_CERTRESOLVER}
+      DEMOPRESS_THEME: ${DEMOPRESS_THEME:-default}
+      DEMOPRESS_PROFILE: ${DEMOPRESS_PROFILE:-default}
+      DEFAULT_DEMO_LIFETIME: ${DEFAULT_DEMO_LIFETIME:-7200}
+      MAX_DEMO_LIFETIME: ${MAX_DEMO_LIFETIME:-43200}
+      FAILED_RETENTION: ${FAILED_RETENTION:-1800}
+      MAX_ACTIVE_DEMOS: ${MAX_ACTIVE_DEMOS:-10}
+      MAX_ACTIVE_DEMOS_PER_IP: ${MAX_ACTIVE_DEMOS_PER_IP:-2}
+      MAX_LAUNCHES_PER_IP_PER_HOUR: ${MAX_LAUNCHES_PER_IP_PER_HOUR:-5}
+      MIN_FREE_MEMORY_MB: ${MIN_FREE_MEMORY_MB:-1024}
+      SQLITE_PATH: ${SQLITE_PATH:-/data/database.sqlite}
+      DOCKER_SOCKET: ${DOCKER_SOCKET:-/var/run/docker.sock}
+      DOCKER_NETWORK: ${DOCKER_NETWORK:-coolify}
+      TRAEFIK_ENTRYPOINTS: ${TRAEFIK_ENTRYPOINTS:-http,https}
+      TRAEFIK_CERTRESOLVER: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
-      DEMO_IMAGE: ${DEMO_IMAGE}
-      SNAPSHOT_ROOT: ${SNAPSHOT_ROOT}
-      MAX_SNAPSHOTS: ${MAX_SNAPSHOTS}
-      TEMPLATE_VERSION: ${TEMPLATE_VERSION}
-      TZ: ${TZ}
-    expose:
-      - "3000"
+      DEMO_IMAGE: ${DEMO_IMAGE:-demopress-wordpress:1.0}
+      SNAPSHOT_ROOT: ${SNAPSHOT_ROOT:-/data/snapshots}
+      MAX_SNAPSHOTS: ${MAX_SNAPSHOTS:-5}
+      AUTO_BUILD_DEMO_IMAGE: ${AUTO_BUILD_DEMO_IMAGE:-1}
+      TZ: ${TZ:-Europe/London}
     volumes:
-      - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - demopress_data:/data
     networks:
-      - coolify
+      - demopress
+
+  template:
+    image: demopress-wordpress:1.0
+    build:
+      context: ./demo
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: template-db:3306
+      WORDPRESS_DB_USER: demopress
+      WORDPRESS_DB_PASSWORD: ${TEMPLATE_DB_PASSWORD:-demopress-template-db}
+      WORDPRESS_DB_NAME: demopress
+      DEMOPRESS_MODE: template
+      INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
+    depends_on:
+      - template-db
+    networks:
+      - demopress
+
+  template-db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: demopress
+      MARIADB_USER: demopress
+      MARIADB_PASSWORD: ${TEMPLATE_DB_PASSWORD:-demopress-template-db}
+      MARIADB_ROOT_PASSWORD: ${TEMPLATE_DB_ROOT_PASSWORD:-demopress-template-root}
+    volumes:
+      - demopress_template_db:/var/lib/mysql
+    networks:
+      - demopress
+
+volumes:
+  demopress_data:
+  demopress_template_db:
 
 networks:
-  coolify:
+  demopress:
+    name: ${DOCKER_NETWORK:-coolify}
     external: true

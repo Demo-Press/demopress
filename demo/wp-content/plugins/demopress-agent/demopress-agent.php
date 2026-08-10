@@ -1,185 +1,35 @@
 <?php
-/*
-Plugin Name: DemoPress Agent
-Description: Connects a WordPress golden template and disposable clones to DemoPress.
-Version: 1.0.0
-Author: DemoPress
-Author URI: https://demopress.co.uk
-*/
+/**
+ * Plugin Name: DemoPress Agent
+ * Description: Golden-template export, readiness and disposable-demo login bridge for DemoPress.
+ * Version: 1.0.0
+ * Author: DemoPress
+ */
 if(!defined('ABSPATH'))exit;
-
-function demopress_mode(){return get_option('demopress_mode','template');}
+const DEMOPRESS_AGENT_VERSION='1.0.0';
+function demopress_mode(){if(defined('DEMOPRESS_MODE'))return (string)DEMOPRESS_MODE;$e=getenv('DEMOPRESS_MODE');return $e?:'template';}
 function demopress_template_mode(){return demopress_mode()==='template';}
-function demopress_demo_mode(){return demopress_mode()==='demo';}
-function demopress_launcher_url(){
-  return rtrim(get_option('demopress_launcher_url',getenv('DEMOPRESS_LAUNCHER_URL')?:''),'/');
-}
-function demopress_allowed(){
-  return is_user_logged_in()&&(current_user_can('manage_options')||in_array('demopress_demo_admin',(array)wp_get_current_user()->roles,true));
-}
-function demopress_token(){return (string)get_option('demopress_template_token','');}
-function demopress_internal_auth($request){
-  $expected=demopress_token();
-  if(!$expected)$expected=getenv('INTERNAL_TEMPLATE_TOKEN')?:($_SERVER['INTERNAL_TEMPLATE_TOKEN']??'');
-  $got=$request->get_header('x-demopress-template-token');
-  return $expected&&$got&&hash_equals($expected,$got);
-}
-
-add_action('admin_menu',function(){
-  if(!current_user_can('manage_options')||!demopress_template_mode())return;
-  add_options_page('DemoPress Agent','DemoPress Agent','manage_options','demopress-agent','demopress_settings_page');
-});
-function demopress_settings_page(){
-  if(isset($_POST['demopress_save'])&&check_admin_referer('demopress_settings')){
-    update_option('demopress_mode',sanitize_text_field($_POST['mode']??'template'));
-    update_option('demopress_launcher_url',esc_url_raw($_POST['launcher_url']??''));
-    if(!empty($_POST['token']))update_option('demopress_template_token',sanitize_text_field($_POST['token']));
-    echo '<div class="notice notice-success"><p>DemoPress settings saved.</p></div>';
-  }
-  $mode=demopress_mode();$url=demopress_launcher_url();
-  echo '<div class="wrap"><h1>DemoPress Agent</h1><p>Connect this WordPress site to your DemoPress instance.</p><form method="post">';
-  wp_nonce_field('demopress_settings');
-  echo '<table class="form-table"><tr><th>Mode</th><td><select name="mode"><option value="template" '.selected($mode,'template',false).'>Golden template</option><option value="demo" '.selected($mode,'demo',false).'>Disposable demo</option></select></td></tr>';
-  echo '<tr><th>DemoPress launcher URL</th><td><input class="regular-text" name="launcher_url" value="'.esc_attr($url).'" placeholder="https://demo.example.com"></td></tr>';
-  echo '<tr><th>Template token</th><td><input class="regular-text" type="password" name="token" placeholder="Leave blank to keep existing token"><p class="description">Must match INTERNAL_TEMPLATE_TOKEN in DemoPress.</p></td></tr></table>';
-  submit_button('Save','primary','demopress_save');
-  echo '</form></div>';
-}
-
-add_action('admin_notices',function(){
- if(demopress_template_mode())echo '<div class="notice notice-warning"><p><strong>DemoPress Template Mode</strong> — This site is the golden source for disposable demos.</p></div>';
- elseif(demopress_demo_mode())echo '<div class="notice notice-info"><p><strong>DemoPress Live Demo</strong> — This environment is temporary and automatically expires.</p></div>';
-});
-
-add_action('wp_dashboard_setup',function(){
- if(!demopress_allowed())return;
- wp_add_dashboard_widget('demopress_demo_widget',demopress_template_mode()?'DemoPress Template':'Live Demo',function(){
-   if(demopress_template_mode()){
-     $url=demopress_launcher_url();
-     echo '<p>This site is the golden source for disposable demos. Finish your changes, then publish a snapshot from DemoPress Manager.</p>';
-     if($url)echo '<p><a class="button button-primary" href="'.esc_url($url.'/manage/template').'">Open DemoPress Manager</a></p>';
-     return;
-   }
-   echo '<p>Welcome to your private WordPress sandbox.</p><p><a class="button" href="'.esc_url(home_url('/')).'">View Site</a> <button class="button" id="demopress-reset">Reset Demo</button></p><p id="demopress-session">Checking session…</p>';
- });
-});
-
-add_action('admin_bar_menu',function($bar){
- if(!demopress_allowed()||demopress_template_mode())return;
- $bar->add_node(['id'=>'demopress','title'=>'DemoPress Demo','href'=>admin_url()]);
- $bar->add_node(['id'=>'demopress-site','parent'=>'demopress','title'=>'View Site','href'=>home_url('/')]);
-},100);
-
-function demopress_assets(){
- if(!demopress_allowed()||demopress_template_mode())return;
- wp_enqueue_script('demopress-tools',plugin_dir_url(__FILE__).'tools.js',[],'1.0.0',true);
- wp_localize_script('demopress-tools','DemoPressAgent',['rest'=>rest_url('demopress-agent/v1/'),'nonce'=>wp_create_nonce('wp_rest')]);
-}
-add_action('admin_enqueue_scripts','demopress_assets');
-add_action('wp_enqueue_scripts','demopress_assets');
-
-add_action('rest_api_init',function(){
- register_rest_route('demopress-agent/v1','/heartbeat',['methods'=>'POST','permission_callback'=>'__return_true','callback'=>function(){
-   $url=demopress_launcher_url();if(!$url)return ['ok'=>false];
-   wp_remote_post($url.'/api/demo-tools/heartbeat',['timeout'=>2,'body'=>['demo'=>wp_parse_url(home_url(),PHP_URL_HOST)]]);
-   return ['ok'=>true];
- }]);
- register_rest_route('demopress-agent/v1','/session',['methods'=>'GET','permission_callback'=>'demopress_allowed','callback'=>function(){
-   $url=demopress_launcher_url();if(!$url)return ['success'=>false];
-   $r=wp_remote_get($url.'/api/demo-tools/session?demo='.rawurlencode(wp_parse_url(home_url(),PHP_URL_HOST)),['timeout'=>3]);
-   return json_decode(wp_remote_retrieve_body($r),true)?:['success'=>false];
- }]);
- register_rest_route('demopress-agent/v1','/reset',['methods'=>'POST','permission_callback'=>'demopress_allowed','callback'=>function(){
-   $url=demopress_launcher_url();if(!$url)return ['success'=>false];
-   $r=wp_remote_post($url.'/api/demo-tools/reset',['timeout'=>3,'body'=>['demo'=>wp_parse_url(home_url(),PHP_URL_HOST)]]);
-   return json_decode(wp_remote_retrieve_body($r),true)?:['success'=>false];
- }]);
-
- register_rest_route('demopress-agent/v1','/status',['methods'=>'GET','permission_callback'=>'demopress_internal_auth','callback'=>function(){
-   require_once ABSPATH.'wp-admin/includes/plugin.php';
-   $plugins=[];
-   foreach(get_plugins() as $file=>$data){
-     $plugins[]=['file'=>$file,'name'=>$data['Name'],'version'=>$data['Version'],'active'=>is_plugin_active($file)];
-   }
-   $themes=[];
-   foreach(wp_get_themes() as $stylesheet=>$theme){
-     $themes[]=['stylesheet'=>$stylesheet,'name'=>$theme->get('Name'),'version'=>$theme->get('Version'),'active'=>$stylesheet===get_stylesheet()];
-   }
-   return [
-     'ok'=>true,
-     'mode'=>demopress_mode(),
-     'wordpress'=>get_bloginfo('version'),
-     'activeTheme'=>get_stylesheet(),
-     'themeVersion'=>wp_get_theme()->get('Version'),
-     'plugins'=>$plugins,
-     'themes'=>$themes,
-     'db'=>true,
-     'site'=>home_url('/')
-   ];
- }]);
-
- register_rest_route('demopress-agent/v1','/export',['methods'=>'POST','permission_callback'=>'demopress_internal_auth','callback'=>function(){
-   if(!demopress_template_mode())return new WP_Error('not_template','Not template mode',['status'=>403]);
-   global $wpdb;
-   $tables=$wpdb->get_col('SHOW TABLES');$sql='';
-   foreach($tables as $table){
-     $create=$wpdb->get_row("SHOW CREATE TABLE `$table`",ARRAY_N);
-     $sql.="DROP TABLE IF EXISTS `$table`;\n".$create[1].";\n";
-     $rows=$wpdb->get_results("SELECT * FROM `$table`",ARRAY_A);
-     foreach($rows as $row){
-       $vals=array_map(function($v)use($wpdb){return is_null($v)?'NULL':"'".$wpdb->_real_escape($v)."'";},array_values($row));
-       $sql.="INSERT INTO `$table` VALUES(".implode(',',$vals).");\n";
-     }
-   }
-   $uploads=wp_upload_dir();$tar='';$content='';
-
-   if(class_exists('PharData')&&is_dir($uploads['basedir'])){
-     try{
-       $tmp=wp_tempnam('demopress-uploads.tar.gz');
-       $base=preg_replace('/\.gz$/','',$tmp);
-       $phar=new PharData($base);
-       $phar->buildFromDirectory($uploads['basedir']);
-       $phar->compress(Phar::GZ);
-       $gz=$base.'.gz';
-       if(file_exists($gz))$tar=base64_encode(file_get_contents($gz));
-     }catch(Throwable $e){}
-   }
-
-   if(class_exists('PharData')){
-     try{
-       $tmp=wp_tempnam('demopress-content.tar.gz');
-       $base=preg_replace('/\.gz$/','',$tmp);
-       $phar=new PharData($base);
-
-       $dirs=[
-         'plugins'=>WP_CONTENT_DIR.'/plugins',
-         'themes'=>WP_CONTENT_DIR.'/themes'
-       ];
-
-       foreach($dirs as $prefix=>$dir){
-         if(!is_dir($dir))continue;
-         $it=new RecursiveIteratorIterator(
-           new RecursiveDirectoryIterator($dir,FilesystemIterator::SKIP_DOTS)
-         );
-         foreach($it as $file){
-           if(!$file->isFile())continue;
-           $local=$prefix.'/'.substr($file->getPathname(),strlen($dir)+1);
-           $phar->addFile($file->getPathname(),$local);
-         }
-       }
-
-       $phar->compress(Phar::GZ);
-       $gz=$base.'.gz';
-       if(file_exists($gz))$content=base64_encode(file_get_contents($gz));
-     }catch(Throwable $e){}
-   }
-
-   return [
-     'ok'=>true,
-     'database_b64'=>base64_encode($sql),
-     'uploads_b64'=>$tar,
-     'content_b64'=>$content,
-     'manifest'=>['site'=>home_url('/'),'time'=>time(),'theme'=>get_stylesheet()]
-   ];
- }]);
-});
+function demopress_saved_secret(){return (string)get_option('demopress_agent_secret','');}
+function demopress_env_secret(){if(defined('DEMOPRESS_INTERNAL_TEMPLATE_TOKEN'))return (string)DEMOPRESS_INTERNAL_TEMPLATE_TOKEN;return (string)(getenv('INTERNAL_TEMPLATE_TOKEN')?:'');}
+function demopress_expected_secret(){return demopress_saved_secret()?:demopress_env_secret();}
+function demopress_auth($request){$a=demopress_expected_secret();$b=(string)$request->get_header('X-DemoPress-Template-Token');return $a!==''&&$b!==''&&hash_equals($a,$b);}
+function demopress_direct_auth(){ $a=demopress_expected_secret();$b=(string)($_SERVER['HTTP_X_DEMOPRESS_TEMPLATE_TOKEN']??'');return $a!==''&&$b!==''&&hash_equals($a,$b);}
+add_action('admin_menu',function(){add_options_page('DemoPress Agent','DemoPress Agent','manage_options','demopress-agent','demopress_settings_page');});
+add_action('admin_init',function(){if(!current_user_can('manage_options')||empty($_POST['demopress_agent_save']))return;check_admin_referer('demopress_agent_save');$action=sanitize_key($_POST['secret_action']??'keep');if($action==='clear')delete_option('demopress_agent_secret');elseif($action==='generate')update_option('demopress_agent_secret',bin2hex(random_bytes(32)),false);elseif($action==='replace'&&!empty($_POST['demopress_agent_secret']))update_option('demopress_agent_secret',sanitize_text_field(wp_unslash($_POST['demopress_agent_secret'])),false);wp_safe_redirect(admin_url('options-general.php?page=demopress-agent&updated=1'));exit;});
+function demopress_settings_page(){if(!current_user_can('manage_options'))return;$saved=demopress_saved_secret();$env=demopress_env_secret();$effective=demopress_expected_secret();$source=$saved?'Saved in WordPress':($env?'Environment / wp-config':'None');?><div class="wrap"><h1>DemoPress Agent</h1><p>Agent version <strong><?php echo esc_html(DEMOPRESS_AGENT_VERSION);?></strong></p><table class="widefat striped" style="max-width:760px"><tbody><tr><td><strong>Mode</strong></td><td><?php echo esc_html(demopress_mode());?></td></tr><tr><td><strong>Secret key</strong></td><td><?php if($effective):?><span style="color:#16803a;font-weight:700">✓ Secret key saved</span><br><code><?php echo esc_html(substr(hash('sha256',$effective),0,12));?>…</code><br><small>Source: <?php echo esc_html($source);?>. The key itself is never displayed.</small><?php else:?><span style="color:#b32d2e;font-weight:700">No secret key configured</span><?php endif;?></td></tr></tbody></table><h2>Secret key</h2><form method="post"><?php wp_nonce_field('demopress_agent_save');?><input type="hidden" name="demopress_agent_save" value="1"><p><label><input type="radio" name="secret_action" value="keep" checked> Keep current key</label></p><p><label><input type="radio" name="secret_action" value="replace"> Replace with: <input type="password" name="demopress_agent_secret" autocomplete="new-password" style="width:420px"></label></p><p><label><input type="radio" name="secret_action" value="generate"> Generate a new 64-character key</label></p><p><label><input type="radio" name="secret_action" value="clear"> Clear saved WordPress key (environment key, if present, becomes effective)</label></p><p class="submit"><button class="button button-primary">Save DemoPress Agent settings</button></p></form><p><strong>Recommended:</strong> use the same secret as <code>INTERNAL_TEMPLATE_TOKEN</code> on the launcher. Environment configuration remains supported for automated deployments.</p></div><?php }
+add_action('admin_notices',function(){if(demopress_template_mode())echo '<div class="notice notice-info"><p><strong>DemoPress Template Site.</strong> Finish your changes, then publish a snapshot from DemoPress Manager. Agent secret status is available under Settings → DemoPress Agent.</p></div>';});
+function demopress_plugins(){require_once ABSPATH.'wp-admin/includes/plugin.php';$a=[];foreach(get_plugins() as $f=>$d)$a[]=['file'=>$f,'name'=>$d['Name']??'','version'=>$d['Version']??'','active'=>is_plugin_active($f)];return $a;}function demopress_themes(){$a=[];foreach(wp_get_themes() as $s=>$t)$a[]=['slug'=>$s,'name'=>$t->get('Name'),'version'=>$t->get('Version'),'active'=>get_stylesheet()===$s];return $a;}
+add_action('rest_api_init',function(){register_rest_route('demopress-agent/v1','/status',['methods'=>'GET','permission_callback'=>'demopress_auth','callback'=>function(){return ['ok'=>true,'agentVersion'=>DEMOPRESS_AGENT_VERSION,'mode'=>demopress_mode(),'secretConfigured'=>demopress_expected_secret()!=='','wordpress'=>get_bloginfo('version'),'activeTheme'=>get_stylesheet(),'themeVersion'=>wp_get_theme()->get('Version'),'plugins'=>demopress_plugins(),'themes'=>demopress_themes(),'db'=>true,'site'=>home_url('/'),'exportProtocol'=>2,'exportMode'=>'stream'];}]);register_rest_route('demopress-agent/v1','/ready',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>function(){return ['ready'=>true,'mode'=>demopress_mode(),'wordpress'=>get_bloginfo('version'),'home'=>home_url('/'),'theme'=>get_stylesheet()];}]);});
+function demopress_headers($type,$name){while(ob_get_level())@ob_end_clean();nocache_headers();header_remove('Content-Type');header('Content-Type: '.$type);header('Content-Disposition: attachment; filename="'.$name.'"');header('X-DemoPress-Export-Protocol: 2');}
+function demopress_tmp($n){return trailingslashit(get_temp_dir()).'demopress-'.$n.'-'.wp_generate_password(12,false,false).'.tar.gz';}
+function demopress_tar($args){$cmd='tar';foreach($args as $a)$cmd.=' '.escapeshellarg($a);exec($cmd.' 2>&1',$out,$code);if($code!==0)throw new RuntimeException('tar failed: '.implode("
+",$out));}
+function demopress_content(){ $f=demopress_tmp('content');demopress_tar(['-czf',$f,'-C',WP_CONTENT_DIR,'--exclude=plugins/demopress-agent','plugins','themes']);return $f;}function demopress_uploads(){ $u=wp_upload_dir();if(!is_dir($u['basedir']))return null;$entries=array_diff(scandir($u['basedir'])?:[],['.','..']);if(!$entries)return null;$f=demopress_tmp('uploads');demopress_tar(['-czf',$f,'-C',$u['basedir'],'.']);return $f;}
+function demopress_stream_db(){global $wpdb;demopress_headers('application/sql; charset=utf-8','database.sql');echo "SET FOREIGN_KEY_CHECKS=0;
+";foreach($wpdb->get_col('SHOW TABLES') as $table){$c=$wpdb->get_row("SHOW CREATE TABLE `$table`",ARRAY_N);if(!$c)continue;echo "DROP TABLE IF EXISTS `$table`;
+{$c[1]};
+";$offset=0;do{$rows=$wpdb->get_results("SELECT * FROM `$table` LIMIT 500 OFFSET ".intval($offset),ARRAY_A);foreach($rows as $row){$vals=array_map(function($v)use($wpdb){return is_null($v)?'NULL':"'".$wpdb->_real_escape($v)."'";},array_values($row));echo "INSERT INTO `$table` VALUES(".implode(',',$vals).");
+";}$offset+=count($rows);}while(count($rows)===500);}echo "SET FOREIGN_KEY_CHECKS=1;
+";}
+add_action('template_redirect',function(){if(empty($_GET['demopress_export']))return;$type=sanitize_key(wp_unslash($_GET['demopress_export']));if(!demopress_template_mode()||!demopress_direct_auth()){status_header(401);exit('Unauthorized');}@set_time_limit(0);if($type==='database'){demopress_stream_db();exit;}if($type==='content'||$type==='uploads'){$f=$type==='content'?demopress_content():demopress_uploads();if(!$f){status_header(204);exit;}demopress_headers('application/gzip',$type.'.tar.gz');header('Content-Length: '.filesize($f));readfile($f);@unlink($f);exit;}status_header(400);exit('Unknown export type');},-1000);
+add_action('init',function(){if(empty($_GET['demopress_demo_login'])||demopress_mode()!=='demo')return;$token=(string)wp_unslash($_GET['demopress_demo_login']);$user=get_user_by('login',getenv('DEMOPRESS_DEMO_USER')?:'');$expected=getenv('DEMOPRESS_DEMO_PASSWORD')?:'';if(!$user||!$expected||!hash_equals($expected,$token))return;wp_set_current_user($user->ID);wp_set_auth_cookie($user->ID,true,is_ssl());wp_safe_redirect(admin_url());exit;});

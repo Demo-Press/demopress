@@ -1,0 +1,1 @@
+{"productName":"WPRaffle","launchHeading":"Try WPRaffle live","launchDescription":"Launch a private WPRaffle demo with WooCommerce, WPRaffle and the companion theme exactly as configured on the golden template.","requiredPlugins":["woo-wallet/woo-wallet.php","woocommerce/woocommerce.php","wpraffle/raffle-system.php"],"requiredTheme":"wpraffle-theme"}

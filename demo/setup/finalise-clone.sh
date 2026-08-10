@@ -1,83 +1,26 @@
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 cd /var/www/html
-
-ms(){ date +%s%3N; }
-
-run_step(){
-  local name="$1" timeout_seconds="$2"; shift 2
-  local start end elapsed rc
-  start="$(ms)"
-  echo "[DIAG] START ${name}"
-  if timeout --foreground "${timeout_seconds}s" "$@"; then
-    end="$(ms)"; elapsed=$((end-start))
-    echo "[DIAG] END ${name} ${elapsed}ms"
-    return 0
-  fi
-  rc=$?; end="$(ms)"; elapsed=$((end-start))
-  if [ "$rc" -eq 124 ]; then
-    echo "[DIAG] TIMEOUT ${name} after ${elapsed}ms"
-  else
-    echo "[DIAG] ERROR ${name} exit=${rc} after ${elapsed}ms"
-  fi
-  return "$rc"
-}
-
-echo "[DIAG] finaliser-start $(date -Iseconds)"
-
-echo "[DIAG] START db-check"
-S="$(ms)"; READY=0
-for i in $(seq 1 60); do
-  if timeout --foreground 8s wp db check --allow-root >/dev/null 2>&1; then READY=1; break; fi
-  sleep 1
-done
-E="$(ms)"
-if [ "$READY" -ne 1 ]; then echo "[DIAG] TIMEOUT db-check after $((E-S))ms"; exit 124; fi
-echo "[DIAG] END db-check $((E-S))ms"
-
-if [ -f /snapshot/content.tar.gz ]; then
-  run_step "product-content-extract" 90 \
-    sh -c 'mkdir -p wp-content/plugins wp-content/themes && tar -xzf /snapshot/content.tar.gz -C wp-content && chown -R www-data:www-data wp-content/plugins wp-content/themes'
-else
-  echo "[DIAG] SKIP product-content-extract"
+log(){ echo "[DIAG] $*"; }
+log "finaliser-start $(date -Iseconds)"
+for i in $(seq 1 30); do [ -f wp-settings.php ] && break; sleep 1; done
+if [ ! -f wp-config.php ]; then
+  wp config create --allow-root --dbname="$WORDPRESS_DB_NAME" --dbuser="$WORDPRESS_DB_USER" --dbpass="$WORDPRESS_DB_PASSWORD" --dbhost="$WORDPRESS_DB_HOST" --skip-check
 fi
-
-
-if [ -f /snapshot/uploads.tar.gz ]; then
-  run_step "uploads-extract" 60 sh -c 'mkdir -p wp-content/uploads && tar -xzf /snapshot/uploads.tar.gz -C wp-content/uploads && chown -R www-data:www-data wp-content/uploads'
-else
-  echo "[DIAG] SKIP uploads-extract"
+# WordPress must recognise HTTPS when Traefik terminates TLS. Without this,
+# wp-admin can canonical-redirect to itself indefinitely behind a reverse proxy.
+if ! grep -q "HTTP_X_FORWARDED_PROTO" wp-config.php; then
+  sed -i "/require_once ABSPATH/i if ( ! empty(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos(\$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false ) { \$_SERVER['HTTPS'] = 'on'; }" wp-config.php
 fi
-
-run_step "search-replace" 90 \
-  wp search-replace "$TEMPLATE_URL" "$WORDPRESS_URL" --all-tables --precise --quiet --allow-root
-
-echo "[DIAG] START required-components"
-S="$(ms)"
-timeout --foreground 30s wp eval '
-require_once ABSPATH . "wp-admin/includes/plugin.php";
-$required=json_decode(getenv("DEMOPRESS_REQUIRED_PLUGINS") ?: "[]",true) ?: [];
-foreach($required as $plugin){
-  if(!is_plugin_active($plugin)){
-    fwrite(STDERR,"[DIAG] ERROR required-components plugin-not-active={$plugin}\n");
-    exit(10);
-  }
-}
-$required_theme=getenv("DEMOPRESS_REQUIRED_THEME") ?: "";
-if($required_theme && wp_get_theme()->get_stylesheet() !== $required_theme){
-  fwrite(STDERR,"[DIAG] ERROR required-components active-theme=".wp_get_theme()->get_stylesheet()."\n");
-  exit(11);
-}
-update_option("demopress_mode","demo");
-update_option("demopress_launcher_url",getenv("DEMOPRESS_LAUNCHER_URL") ?: "");
-update_option("demopress_product_name",getenv("DEMOPRESS_PRODUCT_NAME") ?: "WordPress Demo");
-echo "[DIAG] required-components-ok\n";
-' --allow-root
-E="$(ms)"
-echo "[DIAG] END required-components $((E-S))ms"
-
-run_step "demo-role-and-user" 45 wp eval-file /setup/personalise.php --allow-root
-run_step "rewrite-flush" 25 wp rewrite flush --hard --allow-root || true
-
-echo "[DIAG] finaliser-end $(date -Iseconds)"
-echo "DEMO CLONE READY"
+for i in $(seq 1 30); do wp db check --allow-root >/dev/null 2>&1 && break; sleep 1; done
+[ -f /snapshot/content.tar.gz ] && { log "START product-content-extract"; tar -xzf /snapshot/content.tar.gz -C /var/www/html/wp-content; log "END product-content-extract"; }
+[ -f /snapshot/uploads.tar.gz ] && { log "START uploads-extract"; mkdir -p wp-content/uploads; tar -xzf /snapshot/uploads.tar.gz -C wp-content/uploads; log "END uploads-extract"; }
+OLD=$(wp option get home --allow-root 2>/dev/null || true); NEW="${DEMOPRESS_DEMO_URL:-}"
+if [ -n "$OLD" ] && [ -n "$NEW" ] && [ "$OLD" != "$NEW" ]; then wp search-replace "$OLD" "$NEW" --all-tables --precise --skip-columns=guid --allow-root >/dev/null; fi
+if [ -n "${DEMOPRESS_REQUIRED_THEME:-}" ]; then wp theme activate "$DEMOPRESS_REQUIRED_THEME" --allow-root >/dev/null; fi
+IFS=','; for p in ${DEMOPRESS_REQUIRED_PLUGINS:-}; do [ -n "$p" ] || continue; slug=$(echo "$p"|cut -d/ -f1); wp plugin activate "$slug" --allow-root >/dev/null 2>&1 || true; wp plugin is-active "$slug" --allow-root >/dev/null || { echo "required plugin inactive: $p"; exit 1; }; done; unset IFS
+USER="${DEMOPRESS_DEMO_USER:-demo_user}"; PASS="${DEMOPRESS_DEMO_PASSWORD:-demo_password}"; if wp user get "$USER" --allow-root >/dev/null 2>&1; then wp user update "$USER" --user_pass="$PASS" --role=administrator --allow-root >/dev/null; else wp user create "$USER" "${USER}@example.invalid" --user_pass="$PASS" --role=administrator --allow-root >/dev/null; fi
+wp option update home "$NEW" --allow-root >/dev/null; wp option update siteurl "$NEW" --allow-root >/dev/null
+wp rewrite flush --allow-root >/dev/null || true
+chown -R www-data:www-data /var/www/html/wp-content
+log "finaliser-end $(date -Iseconds)"; echo "DEMO CLONE READY"

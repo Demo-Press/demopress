@@ -1,8 +1,1 @@
-const db=require("./database");const config=require("./config");
-const defaults={maintenance_mode:"0",idle_lifetime:String(config.lifetime),max_lifetime:String(config.maxLifetime),max_active_demos:String(config.maxDemos),failed_retention:String(config.failedRetention)};
-for(const [k,v] of Object.entries(defaults))db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)").run(k,v);
-function get(k,f=null){const r=db.prepare("SELECT value FROM settings WHERE key=?").get(k);return r?r.value:f;}
-function set(k,v){db.prepare("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(k,String(v));}
-function number(k,f){const raw=get(k,f);if(raw===undefined||raw===null||String(raw).trim()==="")return f;const n=Number(raw);return Number.isFinite(n)?n:f;}
-function all(){return Object.fromEntries(db.prepare("SELECT key,value FROM settings").all().map(r=>[r.key,r.value]));}
-module.exports={get,set,number,all};
+const db=require("./database");module.exports={get(k,d=""){const r=db.prepare("SELECT value FROM settings WHERE key=?").get(k);return r?r.value:d},set(k,v){db.prepare("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(k,String(v))},number(k,d){const v=Number(this.get(k,""));return Number.isFinite(v)&&v>0?v:d}};

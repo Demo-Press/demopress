@@ -1,7 +1,12 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 WORKDIR /app
-COPY package*.json ./
+RUN apt-get update && apt-get install -y --no-install-recommends curl tar gzip python3 make g++ ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY launcher/package.json ./
 RUN npm install --omit=dev
-COPY src ./src
+COPY launcher/src ./src
+COPY themes /app/themes
+COPY profiles /app/profiles
+COPY demo /opt/demopress/demo-build
+ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["node","src/server.js"]

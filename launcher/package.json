@@ -2,14 +2,12 @@
   "name": "demopress-launcher",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "start": "node src/server.js"
-  },
+  "scripts": {"start":"node src/server.js"},
   "dependencies": {
-    "better-sqlite3": "^12.0.0",
+    "better-sqlite3": "^12.2.0",
     "dockerode": "^4.0.7",
     "express": "^5.1.0",
+    "tar-fs": "^3.0.9",
     "uuid": "^11.1.0"
-  },
-  "description": "Self-hosted disposable WordPress demo platform"
+  }
 }
