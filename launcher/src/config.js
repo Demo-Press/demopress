@@ -3,7 +3,7 @@ function n(k,d){const v=Number(process.env[k]);return Number.isFinite(v)?v:d}
 const domain=(process.env.DOMAIN||"demo.example.test").toLowerCase().replace(/^https?:\/\//,"").replace(/\/$/,"");
 module.exports={
   platformVersion:"1.0.0",
-  port:n("PORT",3000),domain,
+  port:3000,domain,
   templateDomain:(process.env.TEMPLATE_DOMAIN||`template.${domain}`).replace(/^https?:\/\//,"").replace(/\/$/,""),
   instanceId:domain,
   theme:process.env.DEMOPRESS_THEME||"default",
