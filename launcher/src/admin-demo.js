@@ -2,6 +2,7 @@ const express=require("express");
 const db=require("./database");
 const docker=require("./docker");
 const actions=require("./docker-actions");
+const {managerCsrf}=require("./security");
 const {adminPage}=require("./ui");
 const {esc,fmtSec}=require("./helpers");
 
@@ -27,6 +28,36 @@ async function payload(id){
   }
   return {demo:d,events,wpLogs,dbLogs};
 }
+
+/*
+ * Keep this route ahead of the legacy Manager router. provisioning_events is
+ * intentionally a read-only compatibility VIEW; deletion must target the
+ * canonical events table. Catch failures so a maintenance action never drops
+ * the Manager onto Express' generic 500 page.
+ */
+r.post("/demos/purge-history",managerCsrf,(req,res)=>{
+  try{
+    const cutoff=Math.floor(Date.now()/1000)-(7*86400);
+    const ids=db.prepare("SELECT id FROM demos WHERE status='deleted' AND created_at<?").all(cutoff).map(x=>x.id);
+    const delEvents=db.prepare("DELETE FROM events WHERE demo_id=?");
+    const delDemo=db.prepare("DELETE FROM demos WHERE id=?");
+    const tx=db.transaction(()=>{
+      for(const id of ids){
+        delEvents.run(id);
+        delDemo.run(id);
+      }
+    });
+    tx();
+    try{
+      db.prepare("INSERT INTO admin_actions(created_at,action,demo_id,message) VALUES(?,?,?,?)")
+        .run(Math.floor(Date.now()/1000),"purge_history",null,`Purged ${ids.length} deleted demo records older than 7 days`);
+    }catch(_){}
+    res.redirect("/manage/demos?saved="+encodeURIComponent(ids.length?`Purged ${ids.length} deleted demo record${ids.length===1?"":"s"}`:"No deleted demo records older than 7 days"));
+  }catch(e){
+    console.error("Demo history purge failed:",e);
+    res.redirect("/manage/demos?error="+encodeURIComponent(`Could not purge deleted history: ${e.message||"unknown error"}`));
+  }
+});
 
 r.get("/demos/:id/live.json",async(req,res)=>{
   const x=await payload(req.params.id);
