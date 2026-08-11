@@ -46,6 +46,15 @@ services:
       WORDPRESS_DB_PASSWORD: ${TEMPLATE_DB_PASSWORD:-demopress-template-db}
       WORDPRESS_DB_NAME: demopress
       DEMOPRESS_MODE: template
+      DEMOPRESS_TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('DEMOPRESS_MODE', 'template');
+        define('DEMOPRESS_TEMPLATE_DOMAIN', '${TEMPLATE_DOMAIN}');
+        define('WP_HOME', 'https://${TEMPLATE_DOMAIN}');
+        define('WP_SITEURL', 'https://${TEMPLATE_DOMAIN}');
+        if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos($$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false) {
+          $$_SERVER['HTTPS'] = 'on';
+        }
       INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
     depends_on:
       - template-db
@@ -71,14 +80,9 @@ volumes:
   demopress_template_db:
 
 networks:
-  # Shared ingress/runtime network used by Coolify/Traefik and disposable demos.
   public:
     name: ${DOCKER_NETWORK:-coolify}
     external: true
-
-  # Project-scoped network. Docker Compose automatically prefixes this network
-  # with the Compose project name, so multiple DemoPress deployments on the
-  # same Docker host cannot resolve or connect to each other's template DB.
   template_internal:
     driver: bridge
     internal: true
