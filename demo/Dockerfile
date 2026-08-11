@@ -9,6 +9,6 @@ RUN apt-get update \
 
 COPY wp-content/plugins/demopress-agent /usr/src/wordpress/wp-content/plugins/demopress-agent
 COPY setup/finalise-clone.sh /usr/local/bin/finalise-clone.sh
-COPY ../config/php/wordpress.ini /usr/local/etc/php/conf.d/wordpress.ini
+COPY config/php/wordpress.ini /usr/local/etc/php/conf.d/wordpress.ini
 
 RUN chmod +x /usr/local/bin/finalise-clone.sh
