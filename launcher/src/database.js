@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS demos(
   admin_user TEXT,
   admin_password TEXT,
   ip_address TEXT,
+  visitor_name TEXT,
+  visitor_email TEXT,
+  visitor_company TEXT,
+  email_sent_at INTEGER,
+  email_error TEXT,
   template_version TEXT,
   provision_started_at INTEGER,
   provision_finished_at INTEGER,
@@ -76,6 +81,17 @@ CREATE TABLE IF NOT EXISTS admin_actions(
   message TEXT
 );
 `);
+
+/* Additive migrations for existing 1.0 installations. */
+for(const [name,type] of [
+  ["visitor_name","TEXT"],
+  ["visitor_email","TEXT"],
+  ["visitor_company","TEXT"],
+  ["email_sent_at","INTEGER"],
+  ["email_error","TEXT"]
+]){
+  try{db.exec(`ALTER TABLE demos ADD COLUMN ${name} ${type}`)}catch(e){if(!/duplicate column name/i.test(String(e.message)))throw e}
+}
 
 /*
  * Older Manager code used the name provisioning_events and expected both
