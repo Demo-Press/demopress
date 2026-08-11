@@ -3,14 +3,24 @@ function event(id,stage,message,level="info"){db.prepare("INSERT INTO events(dem
 function shq(v){return `'${String(v).replace(/'/g,"'\\''")}'`}
 async function dbReady(c,id,dbName,user,pass){
   const started=Date.now();
-  for(let i=0;i<90;i++){
-    const cmd=`mariadb --protocol=tcp -h127.0.0.1 -P3306 -u${shq(user)} -p${shq(pass)} ${shq(dbName)} -Nse 'SELECT 1'`;
-    const r=await actions.exec(c,cmd);
+  for(let i=0;i<60;i++){
+    /*
+     * Never allow one client connection attempt to block provisioning.
+     * MariaDB's entrypoint briefly starts a socket-only temporary server,
+     * then restarts on TCP 3306. A client invoked during that transition can
+     * otherwise sit inside docker exec indefinitely on some hosts.
+     */
+    const cmd=`timeout -k 1s 4s mariadb --connect-timeout=2 --protocol=tcp -h127.0.0.1 -P3306 -u${shq(user)} -p${shq(pass)} ${shq(dbName)} -Nse 'SELECT 1' </dev/null`;
+    let r={code:124,out:"probe timed out"};
+    try{r=await actions.exec(c,cmd)}catch(e){r={code:125,out:e.message||String(e)}}
     if(r.code===0&&String(r.out).trim().endsWith("1")){
       event(id,"database",`MariaDB ready after ${((Date.now()-started)/1000).toFixed(2)}s`);
       return;
     }
-    if(i===0||i%5===0)event(id,"database",`Still waiting for MariaDB (${((Date.now()-started)/1000).toFixed(1)}s)`,"debug");
+    if(i===0||i%5===0){
+      const detail=String(r.out||"").trim().split("\n").slice(-1)[0]||`exit ${r.code}`;
+      event(id,"database",`Still waiting for MariaDB (${((Date.now()-started)/1000).toFixed(1)}s): ${detail.slice(0,180)}`,"debug");
+    }
     await sleep(1000);
   }
   throw new Error("MariaDB readiness timeout: demo database user could not connect to port 3306");
