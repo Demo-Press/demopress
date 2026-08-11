@@ -1,5 +1,6 @@
 const path=require("path");
 function n(k,d){const v=Number(process.env[k]);return Number.isFinite(v)?v:d}
+function b(k,d=false){const v=process.env[k];if(v==null||v==='')return d;return ['1','true','yes','on'].includes(String(v).toLowerCase())}
 const domain=(process.env.DOMAIN||"demo.example.test").toLowerCase().replace(/^https?:\/\//,"").replace(/\/$/,"");
 module.exports={
   platformVersion:"1.0.0",
@@ -14,5 +15,20 @@ module.exports={
   entrypoints:(process.env.TRAEFIK_ENTRYPOINTS||"http,https").split(",").map(x=>x.trim()).filter(Boolean),certResolver:process.env.TRAEFIK_CERTRESOLVER||"letsencrypt",
   adminPassword:process.env.ADMIN_PASSWORD||"",templateToken:process.env.INTERNAL_TEMPLATE_TOKEN||"",demoImage:process.env.DEMO_IMAGE||"demopress-wordpress:1.0",
   snapshotRoot:process.env.SNAPSHOT_ROOT||"/data/snapshots",maxSnapshots:n("MAX_SNAPSHOTS",5),autoBuildImage:(process.env.AUTO_BUILD_DEMO_IMAGE||"1")!=="0",
+
+  captureEmail:b("DEMO_CAPTURE_EMAIL",false)||b("DEMO_REQUIRE_EMAIL",false)||b("RESEND_SEND_DEMO_INFO",false),
+  requireEmail:b("DEMO_REQUIRE_EMAIL",false),
+  captureName:b("DEMO_CAPTURE_NAME",false)||b("DEMO_REQUIRE_NAME",false),
+  requireName:b("DEMO_REQUIRE_NAME",false),
+  captureCompany:b("DEMO_CAPTURE_COMPANY",false)||b("DEMO_REQUIRE_COMPANY",false),
+  requireCompany:b("DEMO_REQUIRE_COMPANY",false),
+  captureNotice:process.env.DEMO_CAPTURE_NOTICE||"Your details are used to provide and manage this temporary demo.",
+
+  resendEnabled:b("RESEND_SEND_DEMO_INFO",false),
+  resendApiKey:process.env.RESEND_API_KEY||"",
+  resendFromEmail:process.env.RESEND_FROM_EMAIL||"",
+  resendFromName:process.env.RESEND_FROM_NAME||"DemoPress",
+  resendReplyTo:process.env.RESEND_REPLY_TO||"",
+
   themeRoot:"/app/themes",profileRoot:"/app/profiles",demoBuildRoot:"/opt/demopress/demo-build"
 };
