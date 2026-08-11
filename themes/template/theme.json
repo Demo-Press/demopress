@@ -1,0 +1,15 @@
+{
+  "name": "Your Product",
+  "brandLabel": "YOUR BRAND",
+  "brandSubLabel": "LIVE DEMO",
+  "showStatusLink": true,
+  "links": {
+    "website": "https://example.com",
+    "docs": "https://docs.example.com",
+    "github": "https://github.com/example/project"
+  },
+  "meta": {
+    "titleSuffix": "Your Product",
+    "description": "Launch a private, disposable demo of Your Product."
+  }
+}
