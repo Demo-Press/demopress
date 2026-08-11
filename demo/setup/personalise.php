@@ -14,17 +14,24 @@ if(!$administrator){
     fwrite(STDERR,"[DIAG] ERROR personalise administrator role unavailable\n"); exit(3);
 }
 
+$policy=get_option('demopress_demo_access',[]);
+if(!is_array($policy))$policy=[];
+$base_role_slug=sanitize_key($policy['base_role']??'administrator');
+$base_role=get_role($base_role_slug);
+if(!$base_role){$base_role_slug='administrator';$base_role=$administrator;}
+
 $template_admin=null;
 foreach(get_users(['role'=>'administrator','orderby'=>'ID','order'=>'ASC','number'=>20]) as $candidate){
     if($candidate->user_login!==$user_login){$template_admin=$candidate;break;}
 }
 
-$capabilities=$administrator->capabilities;
+$capabilities=$base_role->capabilities;
 foreach([
  'activate_plugins','install_plugins','update_plugins','delete_plugins','edit_plugins',
  'install_themes','update_themes','delete_themes','switch_themes','edit_themes',
  'update_core','create_users','delete_users','promote_users','edit_users'
 ] as $cap){unset($capabilities[$cap]);}
+$capabilities['demopress_demo_user']=true;
 
 remove_role('demopress_demo_admin');
 $role=add_role('demopress_demo_admin',$role_name,$capabilities);
@@ -66,4 +73,7 @@ if($template_admin){
 
 wp_destroy_all_sessions();
 update_option('default_role','subscriber');
+$restricted=!empty($policy['restrict_menus'])?'yes':'no';
+$allowed=count((array)($policy['allowed_menus']??[]));
+echo "[DIAG] demo-access base-role={$base_role_slug} menu-restriction={$restricted} allowed-menus={$allowed}\n";
 echo "[DIAG] personaliser role=demopress_demo_admin user={$user_login} id={$user_id}\n";
