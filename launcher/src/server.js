@@ -1,16 +1,96 @@
-const express=require("express"),crypto=require("crypto"),config=require("./config"),db=require("./database"),snapshots=require("./snapshots"),provisioner=require("./provisioner"),lifecycle=require("./lifecycle"),docker=require("./docker"),profile=require("./profile"),{publicPage,adminPage,esc}=require("./ui");const app=express();app.use(express.urlencoded({extended:false}));app.use(express.json());
-function ip(req){return (req.headers["x-forwarded-for"]||req.socket.remoteAddress||"").split(",")[0].trim()}function auth(req,res,next){if(!config.adminPassword)return res.status(503).send("ADMIN_PASSWORD is not configured");const h=req.headers.authorization||"";if(h.startsWith("Basic ")){const [,p]=Buffer.from(h.slice(6),"base64").toString().split(":");if(p===config.adminPassword)return next()}res.set("WWW-Authenticate",'Basic realm="DemoPress Manager"').status(401).send("Authentication required")}
-app.get("/",(req,res)=>res.send(publicPage("Live demo",`<section class="hero"><div class="eyebrow">PRIVATE DISPOSABLE WORDPRESS DEMO</div><h1>${esc(profile.launchHeading||`Try ${profile.productName}`)}</h1><p>${esc(profile.launchDescription||"Launch a private disposable clone of our configured WordPress demonstration site.")}</p><div class="actions"><form method="post" action="/launch"><button class="btn">Launch private demo</button></form></div></section><div class="card"><div class="label">How it works</div><p class="muted">A fresh isolated WordPress site and database are created from the current golden template. Your session expires automatically.</p></div>`)));
-app.post("/launch",(req,res)=>{try{const d=provisioner.create(ip(req));res.redirect(`/demo/${d.id}`)}catch(e){res.status(503).send(publicPage("Unavailable",`<section class="hero"><h1>Demo unavailable.</h1><p>${esc(e.message)}</p></section>`))}});
-app.get("/demo/:id",(req,res)=>{const d=db.prepare("SELECT * FROM demos WHERE id=?").get(req.params.id);if(!d)return res.status(404).send(publicPage("Not found","<section class=hero><h1>Demo not found.</h1></section>"));const ready=d.status==="running";res.send(publicPage(ready?"Demo ready":"Preparing demo",`<section class="hero"><div class="eyebrow">${esc(d.status)}</div><h1>${ready?"Your demo is ready.":"Building your private demo…"}</h1><p>${esc(d.status_message||"")}</p><div class="actions">${ready?`<a class="btn" href="${esc(d.url)}/?demopress_demo_login=${esc(d.admin_password)}">Open WordPress</a>`:`<a class="btn secondary" href="/demo/${esc(d.id)}">Refresh status</a>`}</div></section>`))});
-app.get("/status",async(req,res)=>{let dockerOk=true,imageOk=true;try{await docker.ping()}catch(_){dockerOk=false}try{await docker.getImage(config.demoImage).inspect()}catch(_){imageOk=false}res.send(publicPage("Status",`<section class="hero"><div class="eyebrow">SYSTEM STATUS</div><h1>${dockerOk&&imageOk&&snapshots.current()?"Operational":"Attention required"}</h1></section><div class="grid"><div class="card"><div class="label">Docker</div><div class="stat">${dockerOk?"Connected":"Unavailable"}</div></div><div class="card"><div class="label">Runtime image</div><div class="stat">${imageOk?"Available":"Self-build on next launch"}</div></div><div class="card"><div class="label">Template</div><div class="stat">${snapshots.current()?esc(snapshots.current().version):"Not published"}</div></div></div>`))});
-app.use("/manage",auth);app.get("/manage",(req,res)=>{const active=db.prepare("SELECT COUNT(*) c FROM demos WHERE status IN ('queued','provisioning','running','resetting')").get().c,s=snapshots.current();res.send(adminPage("Overview",`<section class="hero"><div class="eyebrow">DEMOPRESS 1.0</div><h1>Control plane.</h1><p>Instance: ${esc(config.instanceId)} · Profile: ${esc(config.profile)} · Theme: ${esc(config.theme)}</p></section><div class="grid"><div class="card"><div class="label">Active demos</div><div class="stat">${active}</div></div><div class="card"><div class="label">Current snapshot</div><div class="stat">${s?esc(s.version):"None"}</div></div><div class="card"><div class="label">Runtime</div><div class="stat">${esc(config.demoImage)}</div></div></div><div class="actions"><form method="post" action="/manage/test-launch"><button class="btn">Launch test demo</button></form><a class="btn secondary" href="/manage/template">Template manager</a></div>`))});
-app.post("/manage/test-launch",(req,res)=>{try{const d=provisioner.create("admin-test",{adminTest:true});res.redirect(`/manage/demos/${d.id}`)}catch(e){res.status(500).send(adminPage("Test failed",`<div class="card danger">${esc(e.message)}</div>`))}});
-app.get("/manage/template",async(req,res)=>{let inv=null,err="";try{inv=await snapshots.status()}catch(e){err=e.message}const cur=snapshots.current();res.send(adminPage("Template",`<section class="hero"><div class="eyebrow">GOLDEN TEMPLATE</div><h1>Publish exact clones.</h1><p>${esc(config.templateDomain)}</p></section>${err?`<div class="card danger">${esc(err)}</div>`:""}<div class="grid"><div class="card"><div class="label">Agent</div><div class="stat">${inv?`v${esc(inv.agentVersion||"?")}`:"Unavailable"}</div></div><div class="card"><div class="label">Current snapshot</div><div class="stat">${cur?esc(cur.version):"None"}</div></div></div><form method="post" action="/manage/template/publish"><button class="btn">Validate & publish snapshot</button></form>`))});
-app.post("/manage/template/publish",async(req,res)=>{try{await snapshots.publish();res.redirect("/manage/template")}catch(e){res.status(500).send(adminPage("Publish failed",`<div class="card danger">${esc(e.message)}</div>`))}});
-app.get("/manage/demos",(req,res)=>{const rows=db.prepare("SELECT * FROM demos ORDER BY created_at DESC LIMIT 100").all();res.send(adminPage("Demos",`<section class="hero"><h1>Demos.</h1></section><table><tr><th>ID</th><th>Status</th><th>Type</th><th>Template</th></tr>${rows.map(d=>`<tr><td><a href="/manage/demos/${esc(d.id)}">${esc(d.id)}</a></td><td>${esc(d.status)}</td><td>${esc(d.demo_type)}</td><td>${esc(d.template_version)}</td></tr>`).join("")}</table>`))});
-app.get("/manage/demos/:id",async(req,res)=>{const d=db.prepare("SELECT * FROM demos WHERE id=?").get(req.params.id);if(!d)return res.status(404).send(adminPage("Not found","<h1>Demo not found</h1>"));const events=db.prepare("SELECT * FROM events WHERE demo_id=? ORDER BY id").all(d.id);res.send(adminPage(d.id,`<section class="hero"><div class="eyebrow">${esc(d.status)}</div><h1>${esc(d.id)}</h1><p>${esc(d.status_message)}</p></section><div class="actions">${d.status==="running"?`<a class="btn" href="${esc(d.url)}/?demopress_demo_login=${esc(d.admin_password)}">Open demo</a>`:""}<form method="post" action="/manage/demos/${esc(d.id)}/destroy"><button class="btn secondary">Delete demo</button></form></div><div class="card"><pre>${esc(events.map(e=>`${new Date(e.created_at_ms).toISOString()} [${e.stage}] ${e.message}`).join("\n"))}</pre></div>`))});
-app.post("/manage/demos/:id/destroy",async(req,res)=>{await lifecycle.destroy(req.params.id,"admin_manual");res.redirect("/manage/demos")});
-app.get("/manage/system",async(req,res)=>{let image="available";try{await docker.getImage(config.demoImage).inspect()}catch(_){image="missing (will self-build)"}const o=await lifecycle.orphanReport();res.send(adminPage("System",`<section class="hero"><h1>System.</h1><p>Instance-scoped Docker ownership prevents other DemoPress deployments from touching these containers.</p></section><div class="grid"><div class="card"><div class="label">Instance</div><div class="stat">${esc(config.instanceId)}</div></div><div class="card"><div class="label">Image</div><div class="stat">${esc(image)}</div></div><div class="card"><div class="label">Reported orphans</div><div class="stat">${o.total}</div></div></div><form method="post" action="/manage/system/reconcile"><button class="btn secondary">Clean this instance's orphans</button></form>`))});
-app.post("/manage/system/reconcile",async(req,res)=>{await lifecycle.reconcile({removeOrphans:true});res.redirect("/manage/system")});
-app.get("/health",(req,res)=>res.json({ok:true,platform:config.platformVersion,instance:config.instanceId,snapshot:snapshots.current()?.version||null}));app.listen(config.port,()=>console.log(`DemoPress ${config.platformVersion} listening on :${config.port} instance=${config.instanceId}`));
+const express=require("express");
+const config=require("./config");
+const db=require("./database");
+const snapshots=require("./snapshots");
+const provisioner=require("./provisioner");
+const docker=require("./docker");
+const profile=require("./profile");
+const admin=require("./admin");
+const {publicPage,esc}=require("./ui");
+
+const app=express();
+app.use(express.urlencoded({extended:false}));
+app.use(express.json());
+
+function ip(req){
+  return (req.headers["x-forwarded-for"]||req.socket.remoteAddress||"")
+    .split(",")[0].trim();
+}
+
+function auth(req,res,next){
+  if(!config.adminPassword)return res.status(503).send("ADMIN_PASSWORD is not configured");
+  const h=req.headers.authorization||"";
+  if(h.startsWith("Basic ")){
+    try{
+      const decoded=Buffer.from(h.slice(6),"base64").toString();
+      const idx=decoded.indexOf(":");
+      const p=idx>=0?decoded.slice(idx+1):"";
+      if(p===config.adminPassword)return next();
+    }catch(_){}
+  }
+  res.set("WWW-Authenticate",'Basic realm="DemoPress Manager"')
+    .status(401).send("Authentication required");
+}
+
+app.get("/",(req,res)=>res.send(publicPage("Live demo",`
+<section class="hero">
+  <div class="eyebrow">PRIVATE DISPOSABLE WORDPRESS DEMO</div>
+  <h1>${esc(profile.launchHeading||`Try ${profile.productName}`)}</h1>
+  <p>${esc(profile.launchDescription||"Launch a private disposable clone of our configured WordPress demonstration site.")}</p>
+  <div class="actions"><form method="post" action="/launch"><button class="btn">Launch private demo</button></form></div>
+</section>
+<div class="card"><div class="label">How it works</div><p class="muted">A fresh isolated WordPress site and database are created from the current golden template. Your session expires automatically.</p></div>
+`)));
+
+app.post("/launch",(req,res)=>{
+  try{
+    const d=provisioner.create(ip(req));
+    res.redirect(`/demo/${d.id}`);
+  }catch(e){
+    res.status(503).send(publicPage("Unavailable",`<section class="hero"><h1>Demo unavailable.</h1><p>${esc(e.message)}</p></section>`));
+  }
+});
+
+app.get("/demo/:id",(req,res)=>{
+  const d=db.prepare("SELECT * FROM demos WHERE id=?").get(req.params.id);
+  if(!d)return res.status(404).send(publicPage("Not found","<section class=hero><h1>Demo not found.</h1></section>"));
+  const ready=d.status==="running";
+  res.send(publicPage(ready?"Demo ready":"Preparing demo",`
+<section class="hero">
+  <div class="eyebrow">${esc(d.status)}</div>
+  <h1>${ready?"Your demo is ready.":"Building your private demo…"}</h1>
+  <p>${esc(d.status_message||"")}</p>
+  <div class="actions">${ready?`<a class="btn" href="${esc(d.url)}/?demopress_demo_login=${esc(d.admin_password)}">Open WordPress</a>`:`<a class="btn secondary" href="/demo/${esc(d.id)}">Refresh status</a>`}</div>
+</section>
+`));
+});
+
+app.get("/status",async(req,res)=>{
+  let dockerOk=true,imageOk=true;
+  try{await docker.ping()}catch(_){dockerOk=false}
+  try{await docker.getImage(config.demoImage).inspect()}catch(_){imageOk=false}
+  const current=snapshots.current();
+  res.send(publicPage("Status",`
+<section class="hero"><div class="eyebrow">SYSTEM STATUS</div><h1>${dockerOk&&imageOk&&current?"Operational":"Attention required"}</h1></section>
+<div class="grid">
+  <div class="card"><div class="label">Docker</div><div class="stat">${dockerOk?"Connected":"Unavailable"}</div></div>
+  <div class="card"><div class="label">Runtime image</div><div class="stat">${imageOk?"Available":"Self-build on next launch"}</div></div>
+  <div class="card"><div class="label">Template</div><div class="stat">${current?esc(current.version):"Not published"}</div></div>
+</div>
+`));
+});
+
+// One authoritative Manager implementation. All Manager pages, actions,
+// diagnostics, analytics, profile/setup and settings live in admin.js.
+app.use("/manage",auth,admin);
+
+app.get("/health",(req,res)=>res.json({
+  ok:true,
+  platform:config.platformVersion,
+  instance:config.instanceId,
+  snapshot:snapshots.current()?.version||null
+}));
+
+app.listen(config.port,()=>{
+  console.log(`DemoPress ${config.platformVersion} listening on :${config.port} instance=${config.instanceId}`);
+});
