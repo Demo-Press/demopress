@@ -32,7 +32,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - demopress_data:/data
     networks:
-      - demopress
+      - public
 
   template:
     image: demopress-wordpress:1.0
@@ -50,7 +50,8 @@ services:
     depends_on:
       - template-db
     networks:
-      - demopress
+      - public
+      - template_internal
 
   template-db:
     image: mariadb:11
@@ -63,13 +64,21 @@ services:
     volumes:
       - demopress_template_db:/var/lib/mysql
     networks:
-      - demopress
+      - template_internal
 
 volumes:
   demopress_data:
   demopress_template_db:
 
 networks:
-  demopress:
+  # Shared ingress/runtime network used by Coolify/Traefik and disposable demos.
+  public:
     name: ${DOCKER_NETWORK:-coolify}
     external: true
+
+  # Project-scoped network. Docker Compose automatically prefixes this network
+  # with the Compose project name, so multiple DemoPress deployments on the
+  # same Docker host cannot resolve or connect to each other's template DB.
+  template_internal:
+    driver: bridge
+    internal: true
