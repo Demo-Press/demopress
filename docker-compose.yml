@@ -28,6 +28,20 @@ services:
       MAX_SNAPSHOTS: ${MAX_SNAPSHOTS:-5}
       AUTO_BUILD_DEMO_IMAGE: ${AUTO_BUILD_DEMO_IMAGE:-1}
       TZ: ${TZ:-Europe/London}
+
+      DEMO_CAPTURE_EMAIL: ${DEMO_CAPTURE_EMAIL:-0}
+      DEMO_REQUIRE_EMAIL: ${DEMO_REQUIRE_EMAIL:-0}
+      DEMO_CAPTURE_NAME: ${DEMO_CAPTURE_NAME:-0}
+      DEMO_REQUIRE_NAME: ${DEMO_REQUIRE_NAME:-0}
+      DEMO_CAPTURE_COMPANY: ${DEMO_CAPTURE_COMPANY:-0}
+      DEMO_REQUIRE_COMPANY: ${DEMO_REQUIRE_COMPANY:-0}
+      DEMO_CAPTURE_NOTICE: ${DEMO_CAPTURE_NOTICE:-Your details are used to provide and manage this temporary demo.}
+
+      RESEND_SEND_DEMO_INFO: ${RESEND_SEND_DEMO_INFO:-0}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      RESEND_FROM_NAME: ${RESEND_FROM_NAME:-DemoPress}
+      RESEND_REPLY_TO: ${RESEND_REPLY_TO:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - demopress_data:/data
