@@ -1,4 +1,103 @@
-const Database=require("better-sqlite3");const fs=require("fs");const path=require("path");const config=require("./config");
-fs.mkdirSync(path.dirname(config.database),{recursive:true});const db=new Database(config.database);db.pragma("journal_mode=WAL");
-db.exec(`CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS snapshots(version TEXT PRIMARY KEY,created_at INTEGER,path TEXT,size_bytes INTEGER,is_current INTEGER DEFAULT 0,manifest_json TEXT);CREATE TABLE IF NOT EXISTS demos(id TEXT PRIMARY KEY,container_id TEXT DEFAULT '',db_container_id TEXT DEFAULT '',url TEXT,created_at INTEGER,last_activity INTEGER,expires_at INTEGER,hard_expires_at INTEGER,status TEXT,provision_stage TEXT,status_message TEXT,error_message TEXT,failure_logs TEXT,admin_user TEXT,admin_password TEXT,ip_address TEXT,template_version TEXT,provision_started_at INTEGER,provision_finished_at INTEGER,demo_type TEXT,platform_version TEXT,database_ms INTEGER DEFAULT 0,import_ms INTEGER DEFAULT 0,wordpress_ms INTEGER DEFAULT 0,finalise_ms INTEGER DEFAULT 0,routing_ms INTEGER DEFAULT 0,health_status TEXT DEFAULT 'unknown',last_health_at INTEGER,public_route_status TEXT DEFAULT 'unknown',public_route_last_error TEXT,archived_wp_logs TEXT,archived_db_logs TEXT,deleted_at INTEGER,delete_reason TEXT);CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,demo_id TEXT,created_at_ms INTEGER,stage TEXT,level TEXT,message TEXT);`);
+const Database=require("better-sqlite3");
+const fs=require("fs");
+const path=require("path");
+const config=require("./config");
+
+fs.mkdirSync(path.dirname(config.database),{recursive:true});
+const db=new Database(config.database);
+db.pragma("journal_mode=WAL");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS settings(
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS snapshots(
+  version TEXT PRIMARY KEY,
+  created_at INTEGER,
+  path TEXT,
+  size_bytes INTEGER,
+  is_current INTEGER DEFAULT 0,
+  manifest_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS demos(
+  id TEXT PRIMARY KEY,
+  container_id TEXT DEFAULT '',
+  db_container_id TEXT DEFAULT '',
+  url TEXT,
+  created_at INTEGER,
+  last_activity INTEGER,
+  expires_at INTEGER,
+  hard_expires_at INTEGER,
+  status TEXT,
+  provision_stage TEXT,
+  status_message TEXT,
+  error_message TEXT,
+  failure_logs TEXT,
+  admin_user TEXT,
+  admin_password TEXT,
+  ip_address TEXT,
+  template_version TEXT,
+  provision_started_at INTEGER,
+  provision_finished_at INTEGER,
+  demo_type TEXT,
+  platform_version TEXT,
+  database_ms INTEGER DEFAULT 0,
+  import_ms INTEGER DEFAULT 0,
+  wordpress_ms INTEGER DEFAULT 0,
+  finalise_ms INTEGER DEFAULT 0,
+  routing_ms INTEGER DEFAULT 0,
+  health_status TEXT DEFAULT 'unknown',
+  last_health_at INTEGER,
+  public_route_status TEXT DEFAULT 'unknown',
+  public_route_last_error TEXT,
+  archived_wp_logs TEXT,
+  archived_db_logs TEXT,
+  deleted_at INTEGER,
+  delete_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS events(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  demo_id TEXT,
+  created_at_ms INTEGER,
+  stage TEXT,
+  level TEXT,
+  message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS admin_actions(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  demo_id TEXT,
+  message TEXT
+);
+`);
+
+/*
+ * Older Manager code used the name provisioning_events and expected both
+ * created_at and created_at_ms. Keep a compatibility view so existing
+ * installations and the restored diagnostics UI can read the canonical
+ * events table without a destructive migration.
+ */
+try{
+  db.exec(`
+    CREATE VIEW IF NOT EXISTS provisioning_events AS
+    SELECT
+      id,
+      demo_id,
+      CAST(created_at_ms / 1000 AS INTEGER) AS created_at,
+      created_at_ms,
+      stage,
+      level,
+      message
+    FROM events;
+  `);
+}catch(e){
+  console.warn("Unable to create provisioning_events compatibility view:",e.message);
+}
+
 module.exports=db;
