@@ -56,8 +56,6 @@ services:
           $$_SERVER['HTTPS'] = 'on';
         }
       INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
-    volumes:
-      - ./demo/config/php/wordpress.ini:/usr/local/etc/php/conf.d/wordpress.ini:ro
     depends_on:
       - template-db
     networks:
