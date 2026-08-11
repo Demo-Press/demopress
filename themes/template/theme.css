@@ -1,0 +1,42 @@
+/*
+ * DemoPress theme starter
+ *
+ * The core UI already provides layout, responsive behaviour, forms, cards,
+ * progress steps and accessibility states. Override the design tokens below
+ * first, then add component-specific rules only when your brand needs them.
+ */
+:root{
+  --bg:#f7f7f5;
+  --fg:#111111;
+  --muted:#686868;
+  --line:#deded8;
+  --brand:#111111;
+  --panel:rgba(255,255,255,.68);
+  --panel-solid:#ffffff;
+  --radius:20px;
+  --radius-sm:13px;
+  --shadow:0 18px 55px rgba(20,20,20,.07);
+  --focus:0 0 0 3px rgba(17,17,17,.12);
+}
+
+/* Optional brand refinements */
+.brand span{font-weight:700}
+.eyebrow{color:var(--brand)}
+
+/*
+ * Useful selectors:
+ * .top             header/navigation
+ * .brand           product name
+ * .public-nav      navigation links
+ * .hero            launch page hero
+ * .btn             primary action
+ * .btn.secondary   secondary action
+ * .card            content panels
+ * .progress-shell  provisioning progress track
+ * .progress-fill   provisioning progress value
+ * .steps/.step     provisioning stages
+ * .step.active     current stage
+ * .step.done       completed stage
+ * .credential      ready-page credentials
+ * .publicfooter    footer
+ */
