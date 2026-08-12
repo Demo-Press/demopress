@@ -1,0 +1,28 @@
+name: Validate DemoPress
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check launcher JavaScript
+        run: find launcher/src -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Check shell scripts
+        run: find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 sh -n
+      - name: Check DemoPress Agent PHP
+        run: find demo/wp-content -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Check JSON files
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),path=require('path');
+          function walk(p){for(const e of fs.readdirSync(p,{withFileTypes:true})){const f=path.join(p,e.name);if(e.isDirectory()&&!f.includes('/.git'))walk(f);else if(e.isFile()&&f.endsWith('.json'))JSON.parse(fs.readFileSync(f,'utf8'));}}
+          walk('.');
+          NODE
