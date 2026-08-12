@@ -7,6 +7,7 @@ const provisioner=require("./provisioner");
 const docker=require("./docker");
 const profile=require("./profile");
 const adminDemo=require("./admin-demo");
+const visitorCaptureAdmin=require("./visitor-capture-admin");
 const admin=require("./admin");
 const {publicPage,esc}=require("./ui");
 
@@ -121,6 +122,7 @@ async function poll(){try{const r=await fetch('/demo/'+encodeURIComponent(id)+'/
 app.get("/status",async(req,res)=>{let dockerOk=true,imageOk=true;try{await docker.ping()}catch(_){dockerOk=false}try{await docker.getImage(config.demoImage).inspect()}catch(_){imageOk=false}const current=snapshots.current();res.send(publicPage("Status",`<section class="hero"><div class="eyebrow">SYSTEM STATUS</div><h1>${dockerOk&&imageOk&&current?"Operational":"Attention required"}</h1></section><div class="grid"><div class="card"><div class="label">Docker</div><div class="stat">${dockerOk?"Connected":"Unavailable"}</div></div><div class="card"><div class="label">Runtime image</div><div class="stat">${imageOk?"Available":"Unavailable"}</div></div><div class="card"><div class="label">Template</div><div class="stat">${current?esc(current.version):"Not published"}</div></div></div>`));});
 
 app.use("/manage",auth,adminDemo);
+app.use("/manage",auth,visitorCaptureAdmin);
 app.use("/manage",auth,admin);
 app.get("/health",(req,res)=>res.json({ok:true,platform:config.platformVersion,instance:config.instanceId,snapshot:snapshots.current()?.version||null}));
 app.listen(config.port,()=>console.log(`DemoPress ${config.platformVersion} listening on :${config.port} instance=${config.instanceId}`));
