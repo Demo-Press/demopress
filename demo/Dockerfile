@@ -9,6 +9,10 @@ RUN apt-get update \
 
 COPY wp-content/plugins/demopress-agent /usr/src/wordpress/wp-content/plugins/demopress-agent
 COPY setup/finalise-clone.sh /usr/local/bin/finalise-clone.sh
+COPY setup/demopress-entrypoint.sh /usr/local/bin/demopress-entrypoint.sh
 COPY config/php/wordpress.ini /usr/local/etc/php/conf.d/wordpress.ini
 
-RUN chmod +x /usr/local/bin/finalise-clone.sh
+RUN chmod +x /usr/local/bin/finalise-clone.sh /usr/local/bin/demopress-entrypoint.sh
+
+ENTRYPOINT ["demopress-entrypoint.sh"]
+CMD ["apache2-foreground"]
