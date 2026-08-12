@@ -26,3 +26,11 @@ jobs:
           function walk(p){for(const e of fs.readdirSync(p,{withFileTypes:true})){const f=path.join(p,e.name);if(e.isDirectory()&&!f.includes('/.git'))walk(f);else if(e.isFile()&&f.endsWith('.json'))JSON.parse(fs.readFileSync(f,'utf8'));}}
           walk('.');
           NODE
+      - name: Guard canonical DemoPress Agent REST route
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('launcher/src/snapshots.js','utf8');
+          if(!s.includes('/wp-json/demopress-agent/v1/${encodeURIComponent(ep)}/')) throw new Error('Agent pretty REST URL must end with a trailing slash');
+          if(!s.includes('redirect:"manual"')) throw new Error('Authenticated template requests must not follow redirects');
+          NODE
