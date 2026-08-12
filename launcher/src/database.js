@@ -19,7 +19,27 @@ CREATE TABLE IF NOT EXISTS snapshots(
   path TEXT,
   size_bytes INTEGER,
   is_current INTEGER DEFAULT 0,
-  manifest_json TEXT
+  manifest_json TEXT,
+  validation_status TEXT DEFAULT 'untested',
+  validated_at INTEGER,
+  validation_demo_id TEXT,
+  validation_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS presets(
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  snapshot_version TEXT,
+  required_plugins_json TEXT DEFAULT '[]',
+  required_theme TEXT DEFAULT '',
+  start_path TEXT DEFAULT '/wp-admin/',
+  idle_lifetime INTEGER,
+  max_lifetime INTEGER,
+  is_enabled INTEGER DEFAULT 1,
+  is_default INTEGER DEFAULT 0,
+  created_at INTEGER,
+  updated_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS demos(
@@ -46,6 +66,7 @@ CREATE TABLE IF NOT EXISTS demos(
   email_sent_at INTEGER,
   email_error TEXT,
   template_version TEXT,
+  preset_slug TEXT DEFAULT 'default',
   provision_started_at INTEGER,
   provision_finished_at INTEGER,
   demo_type TEXT,
@@ -84,16 +105,27 @@ CREATE TABLE IF NOT EXISTS admin_actions(
 `);
 
 /* Additive migrations for existing 1.0 installations. */
-for(const [name,type] of [
-  ["visitor_name","TEXT"],
-  ["visitor_email","TEXT"],
-  ["visitor_company","TEXT"],
-  ["visitor_website","TEXT"],
-  ["email_sent_at","INTEGER"],
-  ["email_error","TEXT"]
+for(const [table,name,type] of [
+  ["demos","visitor_name","TEXT"],
+  ["demos","visitor_email","TEXT"],
+  ["demos","visitor_company","TEXT"],
+  ["demos","visitor_website","TEXT"],
+  ["demos","email_sent_at","INTEGER"],
+  ["demos","email_error","TEXT"],
+  ["demos","preset_slug","TEXT DEFAULT 'default'"],
+  ["snapshots","validation_status","TEXT DEFAULT 'untested'"],
+  ["snapshots","validated_at","INTEGER"],
+  ["snapshots","validation_demo_id","TEXT"],
+  ["snapshots","validation_error","TEXT"]
 ]){
-  try{db.exec(`ALTER TABLE demos ADD COLUMN ${name} ${type}`)}catch(e){if(!/duplicate column name/i.test(String(e.message)))throw e}
+  try{db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`)}catch(e){if(!/duplicate column name/i.test(String(e.message)))throw e}
 }
+
+/* Every existing installation implicitly has a backwards-compatible default preset. */
+const now=Math.floor(Date.now()/1000);
+try{
+  db.prepare(`INSERT OR IGNORE INTO presets(slug,name,description,start_path,is_enabled,is_default,created_at,updated_at) VALUES('default','Default','Existing DemoPress golden-template configuration.','/wp-admin/',1,1,?,?)`).run(now,now);
+}catch(e){console.warn("Unable to initialise default preset:",e.message)}
 
 /*
  * Older Manager code used the name provisioning_events and expected both
