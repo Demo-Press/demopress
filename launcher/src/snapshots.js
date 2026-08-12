@@ -1,16 +1,25 @@
 const fs=require("fs"),path=require("path"),{Readable}=require("stream"),{pipeline}=require("stream/promises");const config=require("./config"),db=require("./database"),profile=require("./profile");fs.mkdirSync(config.snapshotRoot,{recursive:true});
 function current(){return db.prepare("SELECT * FROM snapshots WHERE is_current=1 ORDER BY created_at DESC LIMIT 1").get()}function list(){return db.prepare("SELECT * FROM snapshots ORDER BY created_at DESC").all()}function setCurrent(v){const t=db.transaction(()=>{db.prepare("UPDATE snapshots SET is_current=0").run();db.prepare("UPDATE snapshots SET is_current=1 WHERE version=?").run(v)});t()}function remove(v){const s=db.prepare("SELECT * FROM snapshots WHERE version=?").get(v);if(!s||s.is_current)return false;fs.rmSync(s.path,{recursive:true,force:true});db.prepare("DELETE FROM snapshots WHERE version=?").run(v);return true}
 const headers=()=>({"X-DemoPress-Template-Token":config.templateToken,"Accept":"application/json"});
-async function api(ep){
- const url=`https://${config.templateDomain}/wp-json/demopress-agent/v1/${ep}`;
+async function requestJson(url,ep){
  const r=await fetch(url,{headers:headers(),redirect:"follow",signal:AbortSignal.timeout(30000)});
  const text=await r.text(),type=String(r.headers.get("content-type")||"");
- if(!r.ok)throw new Error(`Template API ${ep} failed (${r.status}): ${text.slice(0,500)}`);
- if(!type.toLowerCase().includes("application/json")){
-  const looksHtml=/^\s*<!doctype|^\s*<html/i.test(text);
-  throw new Error(`Template API ${ep} returned ${looksHtml?'HTML':'a non-JSON response'} (${type||'unknown content type'}). Check that TEMPLATE_DOMAIN points directly to the golden WordPress site and that /wp-json/demopress-agent/v1/${ep} is not being intercepted by a proxy, login page, maintenance page or cache.`);
- }
- try{return JSON.parse(text)}catch(e){throw new Error(`Template API ${ep} returned invalid JSON: ${e.message}`)}
+ if(!r.ok)return{ok:false,status:r.status,text,type,url};
+ if(!type.toLowerCase().includes("application/json"))return{ok:false,status:r.status,text,type,url};
+ try{return{ok:true,data:JSON.parse(text),status:r.status,type,url}}catch(e){return{ok:false,status:r.status,text,type,url,error:`invalid JSON: ${e.message}`}}
+}
+async function api(ep){
+ const pretty=`https://${config.templateDomain}/wp-json/demopress-agent/v1/${ep}`;
+ const fallback=`https://${config.templateDomain}/?rest_route=${encodeURIComponent(`/demopress-agent/v1/${ep}`)}`;
+ const first=await requestJson(pretty,ep);
+ if(first.ok)return first.data;
+ const second=await requestJson(fallback,ep);
+ if(second.ok)return second.data;
+ const looksHtml=/^\s*<!doctype|^\s*<html/i.test(first.text||"")||/^\s*<!doctype|^\s*<html/i.test(second.text||"");
+ const detail=(second.text||first.text||"").slice(0,500);
+ const status=second.status||first.status||0;
+ const type=second.type||first.type||"unknown content type";
+ throw new Error(`Template API ${ep} failed using both REST routes (${status}; ${looksHtml?'HTML':type}). Pretty route: ${pretty}. Fallback route: ${fallback}.${detail?` Response: ${detail}`:""}`);
 }
 async function validate(){const inv=await api("status"),active=new Set((inv.plugins||[]).filter(p=>p.active).map(p=>p.file));const checks={template_mode:inv.mode==="template",wordpress:!!inv.wordpress,export_protocol:Number(inv.exportProtocol||0)>=2,required_plugins:(profile.requiredPlugins||[]).every(x=>active.has(x)),required_theme:!profile.requiredTheme||inv.activeTheme===profile.requiredTheme,db:!!inv.db};return{ok:!Object.values(checks).includes(false),checks,inventory:inv,profile:{productName:profile.productName,requiredPlugins:profile.requiredPlugins||[],requiredTheme:profile.requiredTheme||""}}}
 async function status(){return api("status")}
