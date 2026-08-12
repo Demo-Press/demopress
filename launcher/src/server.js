@@ -1,6 +1,7 @@
 const express=require("express");
 const config=require("./config");
 const db=require("./database");
+const settings=require("./settings");
 const snapshots=require("./snapshots");
 const provisioner=require("./provisioner");
 const docker=require("./docker");
@@ -52,12 +53,21 @@ function publicEventSummary(events,stage){
   if(s.includes("ready"))return"Everything is ready.";
   return publicStage(stage).detail;
 }
+function envMode(capture,required){return required?"required":capture?"optional":"off";}
+function captureMode(field){
+  const fallback=field==="name"?envMode(config.captureName,config.requireName):field==="email"?envMode(config.captureEmail,config.requireEmail):field==="company"?envMode(config.captureCompany,config.requireCompany):envMode(config.captureWebsite,config.requireWebsite);
+  const v=settings.get(`visitor_${field}_mode`,"");
+  return ["off","optional","required"].includes(v)?v:fallback;
+}
+function captureNotice(){return settings.get("visitor_capture_notice",config.captureNotice);}
 function launchForm(error="",values={}){
   const fields=[];
-  if(config.captureName)fields.push(`<label class="capture-field"><span>Name${config.requireName?' *':''}</span><input type="text" name="name" autocomplete="name" maxlength="120" value="${esc(values.name||'')}" ${config.requireName?'required':''} placeholder="Your name"></label>`);
-  if(config.captureEmail)fields.push(`<label class="capture-field"><span>Email address${config.requireEmail?' *':''}</span><input type="email" name="email" autocomplete="email" maxlength="254" value="${esc(values.email||'')}" ${config.requireEmail?'required':''} placeholder="you@example.com"></label>`);
-  if(config.captureCompany)fields.push(`<label class="capture-field"><span>Company${config.requireCompany?' *':''}</span><input type="text" name="company" autocomplete="organization" maxlength="160" value="${esc(values.company||'')}" ${config.requireCompany?'required':''} placeholder="Company name"></label>`);
-  return `<form class="capture-form" method="post" action="/launch">${error?`<div class="capture-error" role="alert">${esc(error)}</div>`:""}${fields.length?`<div class="capture-grid">${fields.join('')}</div><p class="capture-notice">${esc(config.captureNotice)}</p>`:""}<button class="btn" type="submit">Launch private demo →</button></form>`;
+  const add=(field,label,type,autocomplete,max,placeholder)=>{const mode=captureMode(field);if(mode==="off")return;fields.push(`<label class="capture-field"><span>${label}${mode==='required'?' *':''}</span><input type="${type}" name="${field}" autocomplete="${autocomplete}" maxlength="${max}" value="${esc(values[field]||'')}" ${mode==='required'?'required':''} placeholder="${placeholder}"></label>`);};
+  add("name","Name","text","name",120,"Your name");
+  add("email","Email address","email","email",254,"you@example.com");
+  add("company","Company","text","organization",160,"Company name");
+  add("website","Website","url","url",500,"https://example.com");
+  return `<form class="capture-form" method="post" action="/launch">${error?`<div class="capture-error" role="alert">${esc(error)}</div>`:""}${fields.length?`<div class="capture-grid">${fields.join('')}</div><p class="capture-notice">${esc(captureNotice())}</p>`:""}<button class="btn" type="submit">Launch private demo →</button></form>`;
 }
 function launcherPage(error="",values={}){return publicPage("Live demo",`
 <section class="hero"><div class="eyebrow">PRIVATE DISPOSABLE WORDPRESS DEMO</div><h1>${esc(profile.launchHeading||`Try ${profile.productName}`)}</h1><p>${esc(profile.launchDescription||"Launch a private disposable clone of our configured WordPress demonstration site.")}</p><div class="actions">${launchForm(error,values)}</div></section>
@@ -66,11 +76,14 @@ function launcherPage(error="",values={}){return publicPage("Live demo",`
 
 app.get("/",(req,res)=>res.send(launcherPage()));
 app.post("/launch",(req,res)=>{
-  const values={name:String(req.body.name||"").trim(),email:String(req.body.email||"").trim(),company:String(req.body.company||"").trim()};
-  if(config.requireName&&!values.name)return res.status(400).send(launcherPage("Please enter your name.",values));
-  if(config.requireEmail&&!values.email)return res.status(400).send(launcherPage("Please enter your email address.",values));
-  if(config.captureEmail&&values.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email))return res.status(400).send(launcherPage("Please enter a valid email address.",values));
-  if(config.requireCompany&&!values.company)return res.status(400).send(launcherPage("Please enter your company name.",values));
+  const values={name:String(req.body.name||"").trim(),email:String(req.body.email||"").trim(),company:String(req.body.company||"").trim(),website:String(req.body.website||"").trim()};
+  for(const field of ["name","email","company","website"]){if(captureMode(field)==="off")values[field]="";}
+  if(captureMode("name")==="required"&&!values.name)return res.status(400).send(launcherPage("Please enter your name.",values));
+  if(captureMode("email")==="required"&&!values.email)return res.status(400).send(launcherPage("Please enter your email address.",values));
+  if(captureMode("email")!=="off"&&values.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email))return res.status(400).send(launcherPage("Please enter a valid email address.",values));
+  if(captureMode("company")==="required"&&!values.company)return res.status(400).send(launcherPage("Please enter your company name.",values));
+  if(captureMode("website")==="required"&&!values.website)return res.status(400).send(launcherPage("Please enter your website.",values));
+  if(captureMode("website")!=="off"&&values.website){try{const u=new URL(values.website);if(!["http:","https:"].includes(u.protocol))throw new Error();values.website=u.toString();}catch(_){return res.status(400).send(launcherPage("Please enter a valid website URL including https://.",values));}}
   try{const d=provisioner.create(ip(req),{visitor:values});res.redirect(`/demo/${d.id}`);}catch(e){res.status(503).send(publicPage("Unavailable",`<section class="hero"><h1>Demo unavailable.</h1><p>${esc(e.message)}</p><div class="actions"><a class="btn secondary" href="/">Return to launcher</a></div></section>`));}
 });
 
