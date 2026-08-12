@@ -1,4 +1,4 @@
-ARG WORDPRESS_IMAGE=wordpress:7.0.2-php8.3-apache
+ARG WORDPRESS_IMAGE=wordpress:7.0.3-php8.3-apache
 FROM ${WORDPRESS_IMAGE}
 
 RUN apt-get update \
