@@ -11,6 +11,8 @@ const managerAuth=require("./auth");
 const adminDemo=require("./admin-demo");
 const visitorCaptureAdmin=require("./visitor-capture-admin");
 const presetsAdmin=require("./presets-admin");
+const analyticsAdmin=require("./analytics-admin");
+const demoExperienceAdmin=require("./demo-experience-admin");
 const admin=require("./admin");
 const {publicPage,esc}=require("./ui");
 const {managerCsrf}=require("./security");
@@ -59,6 +61,8 @@ app.post("/manage/logout",managerAuth.requireAuth,managerCsrf,managerAuth.logout
 app.use("/manage",managerAuth.requireAuth,adminDemo);
 app.use("/manage",managerAuth.requireAuth,visitorCaptureAdmin);
 app.use("/manage",managerAuth.requireAuth,presetsAdmin);
+app.use("/manage",managerAuth.requireAuth,analyticsAdmin);
+app.use("/manage",managerAuth.requireAuth,demoExperienceAdmin);
 app.use("/manage",managerAuth.requireAuth,admin);
 
 app.get("/health",(req,res)=>res.json({ok:true,platform:config.platformVersion,instance:config.instanceId,snapshot:snapshots.current()?.version||null,presets:presets.list({enabledOnly:true}).length}));
