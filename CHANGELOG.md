@@ -29,6 +29,15 @@
 - WordPress admin notices can optionally be hidden for disposable demo users.
 - Experience controls are implemented through the DemoPress MU-plugin layer and do not modify the golden product configuration.
 
+### Manager visual redesign
+- Reworked the Manager into a cohesive monochrome control-panel design with a persistent grouped sidebar, consistent spacing, typography and responsive mobile navigation.
+- Added proper navigation icons and permanent links for Presets and Demo Experience.
+- Dashboard KPI cards now use a consistent visual hierarchy and are supplemented by live Recent Demos and System Health panels.
+- Operational states across Manager tables use reusable success, warning, failure and animated provisioning pills instead of raw status text.
+- Template Manager now visualises the Exported → Validated → Ready → Active snapshot pipeline and presents snapshots as release cards.
+- Demo Presets are presented as responsive product-style cards rather than a dense configuration table.
+- Manager login has been aligned to the same white/black/neutral design system with no coloured gradient treatment.
+
 ### Security and quality
 - New Manager mutation routes are protected with Manager authentication and CSRF/origin checks.
 - Preset start destinations are constrained to local paths; external CTA/docs/exit destinations accept HTTP/HTTPS only.
