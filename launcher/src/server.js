@@ -6,22 +6,29 @@ const snapshots=require("./snapshots");
 const provisioner=require("./provisioner");
 const docker=require("./docker");
 const profile=require("./profile");
+const managerAuth=require("./auth");
 const adminDemo=require("./admin-demo");
 const visitorCaptureAdmin=require("./visitor-capture-admin");
 const admin=require("./admin");
 const {publicPage,esc}=require("./ui");
+const {managerCsrf}=require("./security");
 
 const app=express();
-app.use(express.urlencoded({extended:false}));
-app.use(express.json());
+app.set("trust proxy",1);
+app.disable("x-powered-by");
+app.use(express.urlencoded({extended:false,limit:"64kb"}));
+app.use(express.json({limit:"64kb"}));
+app.use((req,res,next)=>{
+  res.set("X-Content-Type-Options","nosniff");
+  res.set("X-Frame-Options","DENY");
+  res.set("Referrer-Policy","strict-origin-when-cross-origin");
+  res.set("Permissions-Policy","camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  if(req.path.startsWith("/manage"))res.set("Cache-Control","no-store, max-age=0");
+  if(req.secure||String(req.headers["x-forwarded-proto"]||"").split(",")[0].trim()==="https")res.set("Strict-Transport-Security","max-age=31536000; includeSubDomains");
+  next();
+});
 
 function ip(req){return (req.headers["x-forwarded-for"]||req.socket.remoteAddress||"").split(",")[0].trim();}
-function auth(req,res,next){
-  if(!config.adminPassword)return res.status(503).send("ADMIN_PASSWORD is not configured");
-  const h=req.headers.authorization||"";
-  if(h.startsWith("Basic "))try{const decoded=Buffer.from(h.slice(6),"base64").toString(),idx=decoded.indexOf(":"),p=idx>=0?decoded.slice(idx+1):"";if(p===config.adminPassword)return next();}catch(_){}
-  res.set("WWW-Authenticate",'Basic realm="DemoPress Manager"').status(401).send("Authentication required");
-}
 function publicEvents(id){
   try{return db.prepare("SELECT created_at_ms,stage,level,message FROM provisioning_events WHERE demo_id=? ORDER BY id DESC LIMIT 8").all(id).reverse();}
   catch(_){return db.prepare("SELECT created_at_ms,stage,level,message FROM events WHERE demo_id=? ORDER BY id DESC LIMIT 8").all(id).reverse();}
@@ -37,14 +44,9 @@ function publicStage(stage){
   if(s.includes("ready"))return{title:"Demo ready",detail:"Your private WordPress demo is ready to use."};
   return{title:"Preparing your demo",detail:"Setting up a private WordPress environment for you."};
 }
-function publicMessage(d){
-  if(d.status==="running")return"Your private WordPress demo is ready to use.";
-  if(d.status==="failed")return"We were unable to complete your demo. Please try again.";
-  return publicStage(d.provision_stage).detail;
-}
+function publicMessage(d){if(d.status==="running")return"Your private WordPress demo is ready to use.";if(d.status==="failed")return"We were unable to complete your demo. Please try again.";return publicStage(d.provision_stage).detail;}
 function publicEventSummary(events,stage){
-  const last=(events||[]).slice(-1)[0];
-  if(!last)return publicStage(stage).detail;
+  const last=(events||[]).slice(-1)[0];if(!last)return publicStage(stage).detail;
   const s=String(last.stage||stage||"").toLowerCase();
   if(s.includes("database"))return"Your isolated database is being prepared.";
   if(s.includes("template"))return"The latest demo content is being restored.";
@@ -64,16 +66,12 @@ function captureNotice(){return settings.get("visitor_capture_notice",config.cap
 function launchForm(error="",values={}){
   const fields=[];
   const add=(field,label,type,autocomplete,max,placeholder)=>{const mode=captureMode(field);if(mode==="off")return;fields.push(`<label class="capture-field"><span>${label}${mode==='required'?' *':''}</span><input type="${type}" name="${field}" autocomplete="${autocomplete}" maxlength="${max}" value="${esc(values[field]||'')}" ${mode==='required'?'required':''} placeholder="${placeholder}"></label>`);};
-  add("name","Name","text","name",120,"Your name");
-  add("email","Email address","email","email",254,"you@example.com");
-  add("company","Company","text","organization",160,"Company name");
-  add("website","Website","url","url",500,"https://example.com");
+  add("name","Name","text","name",120,"Your name");add("email","Email address","email","email",254,"you@example.com");add("company","Company","text","organization",160,"Company name");add("website","Website","url","url",500,"https://example.com");
   return `<form class="capture-form" method="post" action="/launch">${error?`<div class="capture-error" role="alert">${esc(error)}</div>`:""}${fields.length?`<div class="capture-grid">${fields.join('')}</div><p class="capture-notice">${esc(captureNotice())}</p>`:""}<button class="btn" type="submit">Launch private demo →</button></form>`;
 }
 function launcherPage(error="",values={}){return publicPage("Live demo",`
 <section class="hero"><div class="eyebrow">PRIVATE DISPOSABLE WORDPRESS DEMO</div><h1>${esc(profile.launchHeading||`Try ${profile.productName}`)}</h1><p>${esc(profile.launchDescription||"Launch a private disposable clone of our configured WordPress demonstration site.")}</p><div class="actions">${launchForm(error,values)}</div></section>
-<div class="grid"><div class="card"><div class="label">01 · Isolated</div><h2>Private environment</h2><p class="muted">A separate WordPress site and database are created just for your session.</p></div><div class="card"><div class="label">02 · Ready-made</div><h2>Real product setup</h2><p class="muted">Your demo starts from the current configured golden template, not an empty WordPress install.</p></div><div class="card"><div class="label">03 · Disposable</div><h2>Safe to explore</h2><p class="muted">Make changes freely. DemoPress automatically removes the environment when its session expires.</p></div></div>
-`);}
+<div class="grid"><div class="card"><div class="label">01 · Isolated</div><h2>Private environment</h2><p class="muted">A separate WordPress site and database are created just for your session.</p></div><div class="card"><div class="label">02 · Ready-made</div><h2>Real product setup</h2><p class="muted">Your demo starts from the current configured golden template, not an empty WordPress install.</p></div><div class="card"><div class="label">03 · Disposable</div><h2>Safe to explore</h2><p class="muted">Make changes freely. DemoPress automatically removes the environment when its session expires.</p></div></div>`);}
 
 app.get("/",(req,res)=>res.send(launcherPage()));
 app.post("/launch",(req,res)=>{
@@ -91,13 +89,12 @@ app.post("/launch",(req,res)=>{
 app.get("/demo/:id/status.json",(req,res)=>{
   const d=db.prepare("SELECT * FROM demos WHERE id=?").get(req.params.id);if(!d)return res.status(404).json({error:"Demo not found"});
   const events=publicEvents(d.id),stage=publicStage(d.provision_stage);
-  res.json({id:d.id,status:d.status,stage:d.provision_stage||"queued",stageTitle:stage.title,message:publicMessage(d),eventSummary:publicEventSummary(events,d.provision_stage),url:d.url||"",username:d.admin_user||"",password:d.admin_password||"",oneClick:d.url&&d.admin_password?`${d.url}/?demopress_demo_login=${encodeURIComponent(d.admin_password)}`:"",expiresAt:d.expires_at||0,error:d.error_message||"",events,progress:Math.min(100,Math.max(8,(stageIndex(d.provision_stage)+1)*17)),emailSent:Boolean(d.email_sent_at)});
+  res.set("Cache-Control","no-store").json({id:d.id,status:d.status,stage:d.provision_stage||"queued",stageTitle:stage.title,message:publicMessage(d),eventSummary:publicEventSummary(events,d.provision_stage),url:d.url||"",username:d.admin_user||"",password:d.admin_password||"",oneClick:d.url&&d.admin_password?`${d.url}/?demopress_demo_login=${encodeURIComponent(d.admin_password)}`:"",expiresAt:d.expires_at||0,error:d.error_message||"",events,progress:Math.min(100,Math.max(8,(stageIndex(d.provision_stage)+1)*17)),emailSent:Boolean(d.email_sent_at)});
 });
 
 app.get("/demo/:id",(req,res)=>{
   const d=db.prepare("SELECT * FROM demos WHERE id=?").get(req.params.id);if(!d)return res.status(404).send(publicPage("Not found","<section class=hero><h1>Demo not found.</h1></section>"));
-  const ready=d.status==="running",failed=d.status==="failed",idx=stageIndex(d.provision_stage),oneClick=d.url&&d.admin_password?`${d.url}/?demopress_demo_login=${encodeURIComponent(d.admin_password)}`:"",stage=publicStage(d.provision_stage),events=publicEvents(d.id);
-  const stages=["Database","Content","WordPress","Configuration","Secure access"];
+  const ready=d.status==="running",failed=d.status==="failed",idx=stageIndex(d.provision_stage),oneClick=d.url&&d.admin_password?`${d.url}/?demopress_demo_login=${encodeURIComponent(d.admin_password)}`:"",stage=publicStage(d.provision_stage),events=publicEvents(d.id),stages=["Database","Content","WordPress","Configuration","Secure access"];
   res.send(publicPage(ready?"Demo ready":failed?"Demo failed":"Preparing demo",`
 <section class="hero" style="padding-bottom:24px"><div class="eyebrow" id="status-label">${ready?'DEMO READY':failed?'PROVISIONING FAILED':'PREPARING YOUR PRIVATE DEMO'}</div><h1 id="headline">${ready?'Your demo is ready.':failed?'We could not complete this demo.':'Preparing your demo…'}</h1><p id="message">${esc(publicMessage(d))}</p></section>
 <div id="progress-card" class="card" ${ready||failed?'style="display:none"':''}><div class="kpirow"><div><div class="label">Setup progress</div><h2 id="stage-title" style="margin:6px 0">${esc(stage.title)}</h2></div><span class="live-dot"><i></i> Live</span></div><div class="progress-shell"><div id="progress" class="progress-fill" style="width:${Math.min(100,Math.max(8,(idx+1)*17))}%"></div></div><div class="steps">${stages.map((s,i)=>`<div id="step-${i}" class="step ${i<idx?'done':i===idx?'active':''}">${s}</div>`).join('')}</div><div id="event-summary" class="muted">${esc(publicEventSummary(events,d.provision_stage))}</div></div>
@@ -106,23 +103,21 @@ app.get("/demo/:id",(req,res)=>{
 <script>
 const id=${JSON.stringify(d.id)},stages=['database','template','wordpress','finalising','routing'];
 function copyField(x){navigator.clipboard.writeText(document.getElementById(x).textContent||'');}
-function render(x){
- const ready=x.status==='running',failed=x.status==='failed';document.getElementById('message').textContent=x.message||'';
- document.getElementById('progress-card').style.display=ready||failed?'none':'';document.getElementById('ready-card').style.display=ready?'':'none';document.getElementById('failed-card').style.display=failed?'':'none';
- if(ready){document.getElementById('status-label').textContent='DEMO READY';document.getElementById('headline').textContent='Your demo is ready.';document.getElementById('url').textContent=x.url;document.getElementById('username').textContent=x.username;document.getElementById('password').textContent=x.password;document.getElementById('admin-link').href=x.oneClick;document.getElementById('site-link').href=x.url;if(x.expiresAt)document.getElementById('expiry').textContent='It is scheduled to expire '+new Date(x.expiresAt*1000).toLocaleString()+'.';}
- else if(failed){document.getElementById('status-label').textContent='PROVISIONING FAILED';document.getElementById('headline').textContent='We could not complete this demo.';document.getElementById('error').textContent=x.error||'Please try again.';}
- else{document.getElementById('stage-title').textContent=x.stageTitle||'Preparing your demo';document.getElementById('progress').style.width=x.progress+'%';const s=String(x.stage||'').toLowerCase(),idx=Math.max(0,stages.findIndex(v=>s.includes(v)));for(let i=0;i<5;i++){document.getElementById('step-'+i).className='step '+(i<idx?'done':i===idx?'active':'');}document.getElementById('event-summary').textContent=x.eventSummary||'Preparing your private demo…';}
- return ready||failed;
-}
+function render(x){const ready=x.status==='running',failed=x.status==='failed';document.getElementById('message').textContent=x.message||'';document.getElementById('progress-card').style.display=ready||failed?'none':'';document.getElementById('ready-card').style.display=ready?'':'none';document.getElementById('failed-card').style.display=failed?'':'none';if(ready){document.getElementById('status-label').textContent='DEMO READY';document.getElementById('headline').textContent='Your demo is ready.';document.getElementById('url').textContent=x.url;document.getElementById('username').textContent=x.username;document.getElementById('password').textContent=x.password;document.getElementById('admin-link').href=x.oneClick;document.getElementById('site-link').href=x.url;if(x.expiresAt)document.getElementById('expiry').textContent='It is scheduled to expire '+new Date(x.expiresAt*1000).toLocaleString()+'.';}else if(failed){document.getElementById('status-label').textContent='PROVISIONING FAILED';document.getElementById('headline').textContent='We could not complete this demo.';document.getElementById('error').textContent=x.error||'Please try again.';}else{document.getElementById('stage-title').textContent=x.stageTitle||'Preparing your demo';document.getElementById('progress').style.width=x.progress+'%';const s=String(x.stage||'').toLowerCase(),idx=Math.max(0,stages.findIndex(v=>s.includes(v)));for(let i=0;i<5;i++){document.getElementById('step-'+i).className='step '+(i<idx?'done':i===idx?'active':'');}document.getElementById('event-summary').textContent=x.eventSummary||'Preparing your private demo…';}return ready||failed;}
 async function poll(){try{const r=await fetch('/demo/'+encodeURIComponent(id)+'/status.json',{cache:'no-store'});if(r.ok){const done=render(await r.json());if(done)return;}}catch(_){}setTimeout(poll,2000);}poll();
-</script>
-`));
+</script>`));
 });
 
 app.get("/status",async(req,res)=>{let dockerOk=true,imageOk=true;try{await docker.ping()}catch(_){dockerOk=false}try{await docker.getImage(config.demoImage).inspect()}catch(_){imageOk=false}const current=snapshots.current();res.send(publicPage("Status",`<section class="hero"><div class="eyebrow">SYSTEM STATUS</div><h1>${dockerOk&&imageOk&&current?"Operational":"Attention required"}</h1></section><div class="grid"><div class="card"><div class="label">Docker</div><div class="stat">${dockerOk?"Connected":"Unavailable"}</div></div><div class="card"><div class="label">Runtime image</div><div class="stat">${imageOk?"Available":"Unavailable"}</div></div><div class="card"><div class="label">Template</div><div class="stat">${current?esc(current.version):"Not published"}</div></div></div>`));});
 
-app.use("/manage",auth,adminDemo);
-app.use("/manage",auth,visitorCaptureAdmin);
-app.use("/manage",auth,admin);
+app.get("/manage/login",managerAuth.loginGet);
+app.post("/manage/login",managerAuth.loginPost);
+app.post("/manage/logout",managerAuth.requireAuth,managerCsrf,managerAuth.logout);
+app.use("/manage",managerAuth.requireAuth,adminDemo);
+app.use("/manage",managerAuth.requireAuth,visitorCaptureAdmin);
+app.use("/manage",managerAuth.requireAuth,admin);
+
 app.get("/health",(req,res)=>res.json({ok:true,platform:config.platformVersion,instance:config.instanceId,snapshot:snapshots.current()?.version||null}));
+app.use((req,res)=>res.status(404).send(publicPage("Not found",`<section class="hero"><div class="eyebrow">404</div><h1>Page not found.</h1><p>The page you requested does not exist.</p><div class="actions"><a class="btn secondary" href="/">Return to launcher</a></div></section>`)));
+app.use((err,req,res,next)=>{console.error("Unhandled request error",err);if(res.headersSent)return next(err);res.status(500).send(req.path.startsWith("/manage")?"DemoPress Manager encountered an unexpected error.":publicPage("Error",`<section class="hero"><h1>Something went wrong.</h1><p>Please try again.</p></section>`));});
 app.listen(config.port,()=>console.log(`DemoPress ${config.platformVersion} listening on :${config.port} instance=${config.instanceId}`));
