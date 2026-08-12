@@ -3,11 +3,13 @@ const db=require("./database");
 const docker=require("./docker");
 const actions=require("./docker-actions");
 const visitorCapture=require("./visitor-capture-admin");
+const managerPolish=require("./manager-polish");
 const {managerCsrf}=require("./security");
 const {adminPage}=require("./ui");
 const {esc,fmtSec}=require("./helpers");
 
 const r=express.Router();
+r.use(managerPolish);
 r.use(visitorCapture);
 
 function cls(s){
