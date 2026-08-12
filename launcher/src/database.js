@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS demos(
   visitor_name TEXT,
   visitor_email TEXT,
   visitor_company TEXT,
+  visitor_website TEXT,
   email_sent_at INTEGER,
   email_error TEXT,
   template_version TEXT,
@@ -87,6 +88,7 @@ for(const [name,type] of [
   ["visitor_name","TEXT"],
   ["visitor_email","TEXT"],
   ["visitor_company","TEXT"],
+  ["visitor_website","TEXT"],
   ["email_sent_at","INTEGER"],
   ["email_error","TEXT"]
 ]){
