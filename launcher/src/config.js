@@ -22,6 +22,8 @@ module.exports={
   requireName:b("DEMO_REQUIRE_NAME",false),
   captureCompany:b("DEMO_CAPTURE_COMPANY",false)||b("DEMO_REQUIRE_COMPANY",false),
   requireCompany:b("DEMO_REQUIRE_COMPANY",false),
+  captureWebsite:b("DEMO_CAPTURE_WEBSITE",false)||b("DEMO_REQUIRE_WEBSITE",false),
+  requireWebsite:b("DEMO_REQUIRE_WEBSITE",false),
   captureNotice:process.env.DEMO_CAPTURE_NOTICE||"Your details are used to provide and manage this temporary demo.",
 
   resendEnabled:b("RESEND_SEND_DEMO_INFO",false),
