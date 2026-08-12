@@ -1,6 +1,17 @@
 const fs=require("fs"),path=require("path"),{Readable}=require("stream"),{pipeline}=require("stream/promises");const config=require("./config"),db=require("./database"),profile=require("./profile");fs.mkdirSync(config.snapshotRoot,{recursive:true});
 function current(){return db.prepare("SELECT * FROM snapshots WHERE is_current=1 ORDER BY created_at DESC LIMIT 1").get()}function list(){return db.prepare("SELECT * FROM snapshots ORDER BY created_at DESC").all()}function setCurrent(v){const t=db.transaction(()=>{db.prepare("UPDATE snapshots SET is_current=0").run();db.prepare("UPDATE snapshots SET is_current=1 WHERE version=?").run(v)});t()}function remove(v){const s=db.prepare("SELECT * FROM snapshots WHERE version=?").get(v);if(!s||s.is_current)return false;fs.rmSync(s.path,{recursive:true,force:true});db.prepare("DELETE FROM snapshots WHERE version=?").run(v);return true}
-const headers=()=>({"X-DemoPress-Template-Token":config.templateToken});async function api(ep){const r=await fetch(`https://${config.templateDomain}/wp-json/demopress-agent/v1/${ep}`,{headers:headers(),signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error(`Template API ${ep} failed (${r.status}): ${(await r.text()).slice(0,500)}`);return r.json()}
+const headers=()=>({"X-DemoPress-Template-Token":config.templateToken,"Accept":"application/json"});
+async function api(ep){
+ const url=`https://${config.templateDomain}/wp-json/demopress-agent/v1/${ep}`;
+ const r=await fetch(url,{headers:headers(),redirect:"follow",signal:AbortSignal.timeout(30000)});
+ const text=await r.text(),type=String(r.headers.get("content-type")||"");
+ if(!r.ok)throw new Error(`Template API ${ep} failed (${r.status}): ${text.slice(0,500)}`);
+ if(!type.toLowerCase().includes("application/json")){
+  const looksHtml=/^\s*<!doctype|^\s*<html/i.test(text);
+  throw new Error(`Template API ${ep} returned ${looksHtml?'HTML':'a non-JSON response'} (${type||'unknown content type'}). Check that TEMPLATE_DOMAIN points directly to the golden WordPress site and that /wp-json/demopress-agent/v1/${ep} is not being intercepted by a proxy, login page, maintenance page or cache.`);
+ }
+ try{return JSON.parse(text)}catch(e){throw new Error(`Template API ${ep} returned invalid JSON: ${e.message}`)}
+}
 async function validate(){const inv=await api("status"),active=new Set((inv.plugins||[]).filter(p=>p.active).map(p=>p.file));const checks={template_mode:inv.mode==="template",wordpress:!!inv.wordpress,export_protocol:Number(inv.exportProtocol||0)>=2,required_plugins:(profile.requiredPlugins||[]).every(x=>active.has(x)),required_theme:!profile.requiredTheme||inv.activeTheme===profile.requiredTheme,db:!!inv.db};return{ok:!Object.values(checks).includes(false),checks,inventory:inv,profile:{productName:profile.productName,requiredPlugins:profile.requiredPlugins||[],requiredTheme:profile.requiredTheme||""}}}
 async function status(){return api("status")}
 async function dl(type,dest,required=true){const r=await fetch(`https://${config.templateDomain}/?demopress_export=${encodeURIComponent(type)}`,{headers:headers(),redirect:"follow",signal:AbortSignal.timeout(900000)});if(r.status===204&&!required)return{present:false,bytes:0};if(!r.ok)throw new Error(`Template ${type} export failed (${r.status}): ${(await r.text()).slice(0,500)}`);const part=dest+".part";await pipeline(Readable.fromWeb(r.body),fs.createWriteStream(part));const st=fs.statSync(part);if(!st.size)throw new Error(`${type} export empty`);fs.renameSync(part,dest);return{present:true,bytes:st.size}}
