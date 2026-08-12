@@ -14,10 +14,10 @@ log "finaliser-start $(date -Iseconds)"
 log "START wordpress-files"
 ready=0
 for i in $(seq 1 30); do
-  if [ -f wp-settings.php ]; then ready=1; break; fi
+  if [ -f wp-settings.php ] && [ -f wp-load.php ] && [ -f wp-includes/functions.php ]; then ready=1; break; fi
   sleep 1
 done
-[ "$ready" -eq 1 ] || fail "wordpress-files timeout"
+[ "$ready" -eq 1 ] || fail "wordpress-files timeout or incomplete WordPress core"
 log "END wordpress-files"
 
 log "START wordpress-config"
@@ -29,8 +29,28 @@ if [ ! -f wp-config.php ]; then
     --dbhost="$WORDPRESS_DB_HOST" \
     --skip-check || fail "wp-config create failed"
 fi
+
+# A valid wp-config.php must hand control to wp-settings.php. A partially
+# generated/corrupted config can still allow low-level DB commands to work but
+# causes normal web requests to reach wp-blog-header.php without wp() defined.
+if ! grep -q "wp-settings.php" wp-config.php; then
+  log "wp-config.php missing wp-settings bootstrap - repairing"
+  cat >> wp-config.php <<'PHP'
+
+/** DemoPress bootstrap repair: load WordPress settings. */
+if ( ! defined( 'ABSPATH' ) ) {
+    define( 'ABSPATH', __DIR__ . '/' );
+}
+require_once ABSPATH . 'wp-settings.php';
+PHP
+fi
+
 if ! grep -q "HTTP_X_FORWARDED_PROTO" wp-config.php; then
-  sed -i "/require_once ABSPATH/i if ( ! empty(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos(\$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false ) { \$_SERVER['HTTPS'] = 'on'; }" wp-config.php
+  if grep -q "wp-settings.php" wp-config.php; then
+    sed -i "/wp-settings.php/i if ( ! empty(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos(\$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false ) { \$_SERVER['HTTPS'] = 'on'; }" wp-config.php
+  else
+    fail "wp-config.php has no WordPress bootstrap insertion point"
+  fi
 fi
 log "END wordpress-config"
 
@@ -42,6 +62,11 @@ for i in $(seq 1 30); do
   sleep 1
 done
 [ "$db_ok" -eq 1 ] || fail "wordpress-bootstrap database check timeout"
+
+# Verify a real WordPress bootstrap, not just DB connectivity.
+BOOTSTRAP=$(timeout -k 2s 20s wp eval 'echo function_exists("wp") ? "WP_BOOTSTRAP_OK" : "WP_BOOTSTRAP_MISSING";' --allow-root --skip-plugins --skip-themes 2>&1) || fail "WordPress PHP bootstrap failed: $BOOTSTRAP"
+echo "$BOOTSTRAP" | grep -q "WP_BOOTSTRAP_OK" || fail "WordPress bootstrap incomplete: $BOOTSTRAP"
+log "wordpress-bootstrap wp-function-ok"
 log "END wordpress-bootstrap"
 
 if [ -f /snapshot/content.tar.gz ]; then
