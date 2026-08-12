@@ -1,29 +1,41 @@
 const fs=require("fs"),path=require("path"),{Readable}=require("stream"),{pipeline}=require("stream/promises");const config=require("./config"),db=require("./database"),profile=require("./profile");fs.mkdirSync(config.snapshotRoot,{recursive:true});
 function current(){return db.prepare("SELECT * FROM snapshots WHERE is_current=1 ORDER BY created_at DESC LIMIT 1").get()}function list(){return db.prepare("SELECT * FROM snapshots ORDER BY created_at DESC").all()}function setCurrent(v){const t=db.transaction(()=>{db.prepare("UPDATE snapshots SET is_current=0").run();db.prepare("UPDATE snapshots SET is_current=1 WHERE version=?").run(v)});t()}function remove(v){const s=db.prepare("SELECT * FROM snapshots WHERE version=?").get(v);if(!s||s.is_current)return false;fs.rmSync(s.path,{recursive:true,force:true});db.prepare("DELETE FROM snapshots WHERE version=?").run(v);return true}
-const headers=()=>({"X-DemoPress-Template-Token":config.templateToken,"Accept":"application/json"});
+const headers=()=>({"X-DemoPress-Template-Token":config.templateToken,"Accept":"application/json","Cache-Control":"no-cache"});
+function isRedirect(status){return status>=300&&status<400}
 async function requestJson(url,ep){
- const r=await fetch(url,{headers:headers(),redirect:"follow",signal:AbortSignal.timeout(30000)});
+ const r=await fetch(url,{headers:headers(),redirect:"manual",signal:AbortSignal.timeout(30000)});
  const text=await r.text(),type=String(r.headers.get("content-type")||"");
+ if(isRedirect(r.status))return{ok:false,status:r.status,text,type,url,redirect:true,location:r.headers.get("location")||""};
  if(!r.ok)return{ok:false,status:r.status,text,type,url};
  if(!type.toLowerCase().includes("application/json"))return{ok:false,status:r.status,text,type,url};
  try{return{ok:true,data:JSON.parse(text),status:r.status,type,url}}catch(e){return{ok:false,status:r.status,text,type,url,error:`invalid JSON: ${e.message}`}}
+}
+function apiError(ep,result,label){
+ if(result.redirect)return new Error(`Template API ${ep} ${label} route returned redirect ${result.status}${result.location?` to ${result.location}`:""}. Authenticated DemoPress requests do not follow redirects so the template secret cannot be forwarded to another endpoint. Check TEMPLATE_DOMAIN/canonical WordPress URL.`);
+ const detail=(result.text||"").slice(0,500),looksHtml=/^\s*<!doctype|^\s*<html/i.test(result.text||"");
+ return new Error(`Template API ${ep} ${label} route failed (${result.status||0}; ${looksHtml?'HTML':result.type||'unknown content type'})${detail?`. Response: ${detail}`:""}`);
 }
 async function api(ep){
  const pretty=`https://${config.templateDomain}/wp-json/demopress-agent/v1/${ep}`;
  const fallback=`https://${config.templateDomain}/?rest_route=${encodeURIComponent(`/demopress-agent/v1/${ep}`)}`;
  const first=await requestJson(pretty,ep);
  if(first.ok)return first.data;
+ /* Never retry authentication/authorization failures through an alternate URL. */
+ if(first.status===401||first.status===403||first.redirect)throw apiError(ep,first,"pretty");
  const second=await requestJson(fallback,ep);
  if(second.ok)return second.data;
- const looksHtml=/^\s*<!doctype|^\s*<html/i.test(first.text||"")||/^\s*<!doctype|^\s*<html/i.test(second.text||"");
- const detail=(second.text||first.text||"").slice(0,500);
- const status=second.status||first.status||0;
- const type=second.type||first.type||"unknown content type";
- throw new Error(`Template API ${ep} failed using both REST routes (${status}; ${looksHtml?'HTML':type}). Pretty route: ${pretty}. Fallback route: ${fallback}.${detail?` Response: ${detail}`:""}`);
+ throw apiError(ep,second,"fallback");
 }
 async function validate(){const inv=await api("status"),active=new Set((inv.plugins||[]).filter(p=>p.active).map(p=>p.file));const checks={template_mode:inv.mode==="template",wordpress:!!inv.wordpress,export_protocol:Number(inv.exportProtocol||0)>=2,required_plugins:(profile.requiredPlugins||[]).every(x=>active.has(x)),required_theme:!profile.requiredTheme||inv.activeTheme===profile.requiredTheme,db:!!inv.db};return{ok:!Object.values(checks).includes(false),checks,inventory:inv,profile:{productName:profile.productName,requiredPlugins:profile.requiredPlugins||[],requiredTheme:profile.requiredTheme||""}}}
 async function status(){return api("status")}
-async function dl(type,dest,required=true){const r=await fetch(`https://${config.templateDomain}/?demopress_export=${encodeURIComponent(type)}`,{headers:headers(),redirect:"follow",signal:AbortSignal.timeout(900000)});if(r.status===204&&!required)return{present:false,bytes:0};if(!r.ok)throw new Error(`Template ${type} export failed (${r.status}): ${(await r.text()).slice(0,500)}`);const part=dest+".part";await pipeline(Readable.fromWeb(r.body),fs.createWriteStream(part));const st=fs.statSync(part);if(!st.size)throw new Error(`${type} export empty`);fs.renameSync(part,dest);return{present:true,bytes:st.size}}
+async function dl(type,dest,required=true){
+ const url=`https://${config.templateDomain}/?demopress_export=${encodeURIComponent(type)}`;
+ const r=await fetch(url,{headers:headers(),redirect:"manual",signal:AbortSignal.timeout(900000)});
+ if(isRedirect(r.status))throw new Error(`Template ${type} export returned redirect ${r.status}. Authenticated exports do not follow redirects; check TEMPLATE_DOMAIN and the canonical template URL.`);
+ if(r.status===204&&!required)return{present:false,bytes:0};
+ if(!r.ok)throw new Error(`Template ${type} export failed (${r.status}): ${(await r.text()).slice(0,500)}`);
+ const part=dest+".part";await pipeline(Readable.fromWeb(r.body),fs.createWriteStream(part));const st=fs.statSync(part);if(!st.size)throw new Error(`${type} export empty`);fs.renameSync(part,dest);return{present:true,bytes:st.size}
+}
 function version(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}.${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`}
 async function publish(){const validation=await validate();if(!validation.ok)throw new Error(`Template validation failed: ${JSON.stringify(validation.checks)}`);const v=version(),dest=path.join(config.snapshotRoot,v);fs.mkdirSync(dest,{recursive:true});try{const database=await dl("database",path.join(dest,"database.sql"),true),content=await dl("content",path.join(dest,"content.tar.gz"),true),uploads=await dl("uploads",path.join(dest,"uploads.tar.gz"),false);const manifest={version:v,createdAt:Date.now(),exportProtocol:2,validation,template:validation.inventory,files:{database,content,uploads}};fs.writeFileSync(path.join(dest,"manifest.json"),JSON.stringify(manifest,null,2));const size=database.bytes+content.bytes+uploads.bytes;db.prepare("INSERT INTO snapshots(version,created_at,path,size_bytes,is_current,manifest_json) VALUES(?,?,?,?,0,?)").run(v,Math.floor(Date.now()/1000),dest,size,JSON.stringify(manifest));setCurrent(v);for(const s of list().slice(config.maxSnapshots))if(!s.is_current)remove(s.version);return db.prepare("SELECT * FROM snapshots WHERE version=?").get(v)}catch(e){fs.rmSync(dest,{recursive:true,force:true});throw e}}
 module.exports={current,list,setCurrent,remove,validate,status,publish};
