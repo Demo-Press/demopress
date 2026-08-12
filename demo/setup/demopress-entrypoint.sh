@@ -1,6 +1,16 @@
 #!/bin/sh
 set -eu
 
+# Never allow an empty WordPress table prefix. Coolify/Compose may pass an
+# explicitly empty variable, which the upstream WordPress entrypoint will then
+# write into wp-config.php and WordPress rejects with a Configuration Error.
+# DemoPress snapshots use the normal wp_ prefix unless a future snapshot format
+# explicitly carries a custom prefix.
+if [ -z "${WORDPRESS_TABLE_PREFIX:-}" ]; then
+  WORDPRESS_TABLE_PREFIX="wp_"
+  export WORDPRESS_TABLE_PREFIX
+fi
+
 # Disposable demo containers start with an empty /var/www/html. The golden
 # template may use a persistent /var/www/html volume. Always make sure the
 # WordPress core tree exists BEFORE creating/updating the Agent directory.
