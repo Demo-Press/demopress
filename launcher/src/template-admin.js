@@ -20,7 +20,7 @@ r.get("/",async(req,res)=>{
   const list=snapshots.list(),cur=snapshots.current(),access=status.demoAccess||null;
   res.send(adminPage("Template",`
 <div class="crumb">Manager / Template</div>
-<div class="kpirow"><div><h1>Golden Template</h1><div class="sub">Export a candidate snapshot, validate it in an isolated demo, then promote it to active. Rollback only uses previously validated snapshots.</div></div><a class="btn secondary" href="/manage/presets">Manage Demo Presets</a></div>
+<div class="kpirow"><div><h1>Golden Template</h1><div class="sub">Export a candidate snapshot, validate it in an isolated demo, then promote it to active. Rollback only uses previously validated snapshots.</div></div><div class="actions"><a class="btn secondary" href="/manage/presets">Demo Presets</a><a class="btn secondary" href="/manage/settings/demo-experience">Demo Experience</a></div></div>
 <div class="grid">
  <div class="card"><div class="label">Connection</div><div class="stat ${status.ok?"success":"danger"}">${status.ok?"Connected":"Unavailable"}</div></div>
  <div class="card"><div class="label">Source validation</div><div class="stat ${validation.ok?"success":"danger"}">${validation.ok?"Passed":"Failed"}</div></div>
