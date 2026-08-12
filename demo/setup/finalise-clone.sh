@@ -30,6 +30,23 @@ if [ ! -f wp-config.php ]; then
     --skip-check || fail "wp-config create failed"
 fi
 
+# Never allow WordPress to boot with an empty table prefix. Prefer an explicit
+# runtime prefix, otherwise infer the prefix from the snapshot's options table.
+# Older snapshots without detectable metadata safely fall back to wp_.
+PREFIX="${WORDPRESS_TABLE_PREFIX:-}"
+if [ -z "$PREFIX" ] && [ -f /snapshot/database.sql ]; then
+  PREFIX=$(sed -n 's/^CREATE TABLE `\([^`]*\)options`.*/\1/p' /snapshot/database.sql | head -1 || true)
+fi
+[ -n "$PREFIX" ] || PREFIX="wp_"
+CURRENT_PREFIX=$(timeout -k 2s 15s wp config get table_prefix --allow-root 2>/dev/null || true)
+if [ -z "$CURRENT_PREFIX" ] || [ "$CURRENT_PREFIX" != "$PREFIX" ]; then
+  log "wp-config.php table prefix '${CURRENT_PREFIX:-<empty>}' -> '$PREFIX'"
+  timeout -k 2s 20s wp config set table_prefix "$PREFIX" --type=variable --allow-root >/dev/null || fail "unable to set WordPress table prefix"
+fi
+CHECK_PREFIX=$(timeout -k 2s 15s wp config get table_prefix --allow-root 2>/dev/null || true)
+[ -n "$CHECK_PREFIX" ] || fail "WordPress table prefix is still empty after repair"
+log "wordpress-config table-prefix=$CHECK_PREFIX"
+
 # A valid wp-config.php must hand control to wp-settings.php. A partially
 # generated/corrupted config can still allow low-level DB commands to work but
 # causes normal web requests to reach wp-blog-header.php without wp() defined.
