@@ -1,5 +1,37 @@
 # DemoPress UI Coverage
 
-The hardened 1.0-RC uses the shared DemoPress theme for the launcher, setup-required state, provisioning, ready page, failure pages, public health, expired/missing demos, public 404, Manager dashboard, demos, setup wizard, profile editor, template manager, diagnostics, analytics, system health, settings and Manager 404.
+DemoPress 1.0 uses the shared DemoPress visual system across the public launcher and Manager experience.
 
-The browser Basic Auth prompt is intentionally native because authentication happens before Manager HTML can be rendered.
+## Public/customer-facing states
+
+- launcher / visitor-capture form
+- setup-required state
+- provisioning progress
+- ready/demo-access page
+- failure state
+- expired/missing demo state
+- public health endpoint
+- public 404
+
+The default DemoPress launcher is monochrome and responsive. Tablet/mobile navigation uses a compact burger menu.
+
+## Manager
+
+The Manager includes:
+
+- dedicated Manager sign-in page
+- Overview dashboard
+- Demos and Demo Details
+- Analytics
+- Setup Wizard
+- Profile editor
+- Template / snapshot release pipeline
+- Presets
+- Visitor Capture
+- Demo Experience
+- Diagnostics
+- System health
+- Settings
+- Manager 404/error states
+
+Desktop Manager uses the grouped sidebar. Tablet/mobile uses the same sections in a slide-out sidebar drawer so navigation remains consistent across screen sizes.
