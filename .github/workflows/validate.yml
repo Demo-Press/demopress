@@ -34,3 +34,16 @@ jobs:
           if(!s.includes('/wp-json/demopress-agent/v1/${encodeURIComponent(ep)}/')) throw new Error('Agent pretty REST URL must end with a trailing slash');
           if(!s.includes('redirect:"manual"')) throw new Error('Authenticated template requests must not follow redirects');
           NODE
+      - name: Guard V1 release hardening
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=fs.readFileSync('launcher/src/config.js','utf8');
+          const db=fs.readFileSync('launcher/src/database.js','utf8');
+          const life=fs.readFileSync('launcher/src/lifecycle.js','utf8');
+          const server=fs.readFileSync('launcher/src/server.js','utf8');
+          if(!cfg.includes('platformVersion:"1.0.0"')||!cfg.includes('buildVersion:"1.0.0"')) throw new Error('V1 version markers are not aligned');
+          if(!db.includes('demopress_public_launch_guard')||!db.includes('demopress_public_launch_log')) throw new Error('Database launch guard is missing');
+          if(!life.includes('stale_provisioning_timeout')||!life.includes("delete_reason,'')!='expired'")) throw new Error('Lifecycle recovery/expiry guard is missing');
+          for(const h of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','Permissions-Policy','Strict-Transport-Security']) if(!server.includes(h)) throw new Error('Missing security header: '+h);
+          NODE
