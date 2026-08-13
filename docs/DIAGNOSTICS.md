@@ -1,9 +1,13 @@
-# Diagnostic Pass
+# DemoPress Diagnostics
 
-Adds millisecond-level provisioning events, SQL import progress, WordPress container timings, finaliser sub-step timings, active HTTPS checks, cleaned Docker logs, and a Copy Diagnostic Log / plain-text diagnostic endpoint.
+DemoPress records millisecond-level provisioning events, database import timing, WordPress container timing, clone-finaliser timing, HTTPS route checks and cleaned container logs.
 
-Deployment for this release:
-- GitHub update
-- Coolify redeploy (launcher changes)
-- VPS git pull
-- rebuild `demopress-demo-wp:latest` (demo finaliser changed)
+Use **Manager → Diagnostics** for platform checks and **Manager → Demos → Demo Details** for the event timeline and logs for a specific disposable environment.
+
+The supported runtime image is `demopress-wordpress:1.0`. With `AUTO_BUILD_DEMO_IMAGE=1`, DemoPress can build the bundled runtime when it is missing. For a manual rebuild after runtime changes, use:
+
+```bash
+./scripts/rebuild-demo-image.sh
+```
+
+A normal launch progresses through database setup, snapshot restore, WordPress startup, finalising, routing verification and Ready. When provisioning fails, use the recorded stage and event timeline as the primary troubleshooting source.
