@@ -235,10 +235,10 @@ h1,h2,h3{
 
 @media(max-width:760px){
   .wrap{padding:0 14px 38px}
-  .top{min-height:68px;padding:12px 0;display:grid;grid-template-columns:1fr}
+  .top{min-height:68px;padding:12px 0;display:flex}
   .brand span{font-size:8px;letter-spacing:.14em}
-  .public-nav{margin:2px 0 0;padding-bottom:2px;gap:4px}
-  .public-nav a{background:#fff;border:1px solid #deded8;border-radius:11px;padding:10px 12px}
+  .public-nav{margin:0;padding:9px;gap:2px}
+  .public-nav a{background:#fff;border:1px solid #deded8;border-radius:11px;padding:12px 13px}
   .hero{padding:72px 0 46px}
   .hero h1{font-size:clamp(47px,15vw,70px);letter-spacing:-.06em}
   .hero p{font-size:17px;line-height:1.62}
