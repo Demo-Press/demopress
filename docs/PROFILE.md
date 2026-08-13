@@ -1,11 +1,10 @@
 # DemoPress Profile
 
-DemoPress behavior is controlled by a JSON profile. By default the launcher looks for:
+DemoPress behavior is controlled by a JSON profile.
 
-1. `PROFILE_PATH`
-2. `/data/profile.json`
-3. `config/profile.json`
-4. `config/profile.example.json`
+`DEMOPRESS_PROFILE` selects the bundled base profile from `profiles/<name>.json`. Manager-saved customisations are persisted in `/data/profile.json`, merged over the bundled profile and read dynamically so normal launcher redeployments keep the saved configuration.
+
+DemoPress 1.0 also normalises older profiles where selected product components were stored only in the allowed plugin/theme fields so required-component Manager views remain consistent.
 
 Important keys:
 
@@ -51,3 +50,5 @@ Example:
 ```
 
 The golden snapshot also carries the template's plugin and theme files, so product-specific code is not baked into the DemoPress core image.
+
+Demo Presets can select validated snapshots and apply per-demo required components, start path and lifetime settings without creating a separate DemoPress installation.
