@@ -7,7 +7,9 @@ DemoPress is a self-hosted platform for creating private, disposable WordPress p
 - One generic launcher/runtime codebase.
 - `DEMOPRESS_THEME` selects launcher branding.
 - `DEMOPRESS_PROFILE` selects required WordPress plugins/theme and product copy.
-- A golden WordPress template is published as streamed `database.sql`, `content.tar.gz`, `uploads.tar.gz` and `manifest.json`.
+- Golden-template exports become candidate snapshots containing `database.sql`, `content.tar.gz`, optional `uploads.tar.gz` and `manifest.json`.
+- Candidate snapshots are validated with an isolated disposable test before promotion for public use.
+- Demo Presets select a validated snapshot plus product requirements, start path and lifetime settings.
 - Every disposable WordPress demo receives its own MariaDB container and temporary WordPress user.
 - Docker resources are labelled with `com.demopress.instance=<DOMAIN>` so multiple DemoPress deployments on one daemon remain isolated.
 - The generic runtime image is `demopress-wordpress:1.0`.
@@ -21,11 +23,13 @@ DemoPress is a self-hosted platform for creating private, disposable WordPress p
 4. Install and configure the product plugins/theme you want visitors to experience.
 5. Ensure **DemoPress Agent** is active.
 6. Open **WordPress → Settings → DemoPress Agent** and confirm the Agent secret is configured.
-7. Configure **Demo user access** in DemoPress Agent before publishing the template.
-8. Visit `/manage` on the launcher domain. DemoPress presents its own Manager sign-in page; use `ADMIN_PASSWORD` to sign in.
-9. Open **Template** in Manager, validate the golden template and publish a snapshot.
-10. Launch an **Administrator Test** and verify the disposable site, temporary user and permitted WordPress areas.
-11. When the test is healthy, make the public launcher available to visitors.
+7. Configure **Demo user access** in DemoPress Agent.
+8. Visit `/manage` on the launcher domain and sign in with the configured Manager password.
+9. Open **Template**, validate the source and export a candidate snapshot.
+10. Validate the candidate with an isolated test and promote it after validation passes.
+11. Configure or review the Demo Preset that should use the validated snapshot.
+12. Launch a test from the promoted snapshot and verify the disposable site, temporary user and permitted WordPress areas.
+13. When the test is healthy, make the public launcher available to visitors.
 
 ## DemoPress Agent secret key
 
@@ -51,7 +55,7 @@ When a disposable demo is created, DemoPress builds a dedicated `demopress_demo_
 
 The Agent enforces the selected menu policy in disposable-demo mode, while a clone-side MU security guard blocks DemoPress platform settings and dangerous WordPress platform URLs even if the baseline role is broad.
 
-The access policy is stored in the golden WordPress database, so it automatically travels with the published snapshot.
+The access policy is stored in the golden WordPress database, so it automatically travels with snapshot exports.
 
 ## Visitor capture
 
@@ -65,19 +69,32 @@ Captured values are stored against the demo for Manager/analytics use whether or
 
 If Resend is configured and an email address was supplied, DemoPress can send the ready demo URL, temporary credentials and one-click Admin link when provisioning completes. Email-delivery failures are recorded but do not turn a working demo into a failed demo.
 
-## Golden-template workflow
+## Golden-template and snapshot workflow
 
 The recommended operating workflow is:
 
 1. Make product/content changes on the permanent template WordPress site.
 2. Configure DemoPress Agent secret and demo-user access policy.
-3. In DemoPress Manager, validate the template.
-4. Publish a new golden snapshot.
-5. Launch an Administrator Test.
-6. Confirm the public site, WordPress Admin, role restrictions and required product features.
-7. Keep that snapshot current until you intentionally publish another one.
+3. Validate the golden template in Manager.
+4. Export a candidate snapshot.
+5. Run isolated validation against that candidate.
+6. Inspect validation diagnostics if it fails; a failed or untested candidate should not be used for public demos.
+7. Promote the candidate after validation passes.
+8. Assign the validated snapshot to the appropriate Demo Preset.
+9. Launch a test and confirm the public site, WordPress Admin, role restrictions and required product features.
+10. Use the public launcher after the promoted snapshot and preset have been verified.
 
-Template WordPress content is persistent. Redeploying DemoPress should not be used as a substitute for publishing a new snapshot after product changes.
+Publishing/exporting a snapshot does not itself make it trusted for public use. Snapshot validation and promotion are deliberate release steps. Template WordPress content remains persistent across normal redeployments.
+
+## Demo Presets
+
+A single DemoPress installation can expose multiple configured demo experiences. Presets can select a validated snapshot, required plugins/theme, start path, lifetime limits and whether the preset is enabled/default. Existing installations retain a backwards-compatible `default` preset.
+
+The public launcher supports `?preset=<slug>` and shows a selector when multiple presets are enabled.
+
+## Demo Experience
+
+Manager includes product-neutral Demo Experience controls for disposable environments. These can provide temporary-demo context such as a toolbar, expiry information, documentation/product links and optional WordPress notice suppression without modifying the demonstrated product configuration.
 
 ## Profiles and themes
 
@@ -96,13 +113,13 @@ DEMOPRESS_PROFILE=<name>
 DEMOPRESS_THEME=<name>
 ```
 
-Product files themselves are carried by the published snapshot rather than separate runtime images.
+Product files themselves are carried by snapshots rather than separate runtime images.
 
 ## Manager authentication and security
 
-`/manage` uses a dedicated DemoPress sign-in page backed by `ADMIN_PASSWORD` and a signed session cookie. Manager write actions are protected by authentication, CSRF validation and same-origin checks.
+`/manage` uses a dedicated DemoPress sign-in page backed by the configured Manager password and a signed session cookie. Manager write actions are protected by authentication, CSRF validation and same-origin checks.
 
-Use HTTPS for both launcher and template domains. Treat `ADMIN_PASSWORD`, `INTERNAL_TEMPLATE_TOKEN`, database passwords and any Resend API key as secrets.
+Use HTTPS for both launcher and template domains. Keep Manager, Agent, database and mail-provider credentials in deployment secrets rather than profile JSON or source control.
 
 ## Useful checks
 
@@ -111,14 +128,16 @@ Before considering a deployment complete, verify:
 - Template validation passes.
 - Agent secret is configured.
 - Demo user baseline role and allowed menus are intentional.
-- A golden snapshot is current.
-- Administrator Test reaches **Ready**.
+- The intended snapshot has passed isolated validation and has been promoted.
+- Public presets reference the intended validated snapshot.
+- A test demo reaches **Ready** only after clone finalisation succeeds.
 - Public demo URL works through HTTPS.
 - One-click Admin signs in as the generated DemoPress demo role.
 - Protected WordPress platform areas return access denied for the demo user.
 - Visitor-capture requirements match your privacy/lead-capture policy.
 - Resend delivery works if enabled.
+- Manager diagnostics show no unexpected orphan resources.
 
 ## Runtime image
 
-DemoPress intentionally uses one generic runtime image. Product-specific plugins, themes, uploads and database state come from the golden snapshot. Avoid maintaining separate product-specific DemoPress runtime repositories or images unless you have a specific infrastructure reason to do so.
+DemoPress intentionally uses one generic runtime image. Product-specific plugins, themes, uploads and database state come from snapshots. Avoid maintaining separate product-specific DemoPress runtime repositories or images unless you have a specific infrastructure reason to do so.
