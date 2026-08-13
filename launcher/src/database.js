@@ -21,6 +21,38 @@ CREATE INDEX IF NOT EXISTS idx_demos_ip_status ON demos(ip_address,status);
 
 for(const [table,name,type] of [["demos","visitor_name","TEXT"],["demos","visitor_email","TEXT"],["demos","visitor_company","TEXT"],["demos","visitor_website","TEXT"],["demos","email_sent_at","INTEGER"],["demos","email_error","TEXT"],["demos","preset_slug","TEXT DEFAULT 'default'"],["snapshots","validation_status","TEXT DEFAULT 'untested'"],["snapshots","validated_at","INTEGER"],["snapshots","validation_demo_id","TEXT"],["snapshots","validation_error","TEXT"]]){try{db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`)}catch(e){if(!/duplicate column name/i.test(String(e.message)))throw e}}
 
+const maxPerIp=Math.max(1,Number(config.maxPerIp)||2);
+const maxPerHour=Math.max(1,Number(config.maxPerHour)||5);
+db.exec(`
+DROP TRIGGER IF EXISTS demopress_public_launch_guard;
+DROP TRIGGER IF EXISTS demopress_public_launch_log;
+CREATE TRIGGER demopress_public_launch_guard
+BEFORE INSERT ON demos
+WHEN NEW.demo_type='public'
+BEGIN
+  DELETE FROM launches WHERE created_at < CAST(strftime('%s','now') AS INTEGER)-86400;
+  SELECT CASE WHEN (
+    SELECT COUNT(*) FROM demos
+    WHERE ip_address=NEW.ip_address
+      AND status IN ('queued','provisioning','running','resetting')
+  ) >= ${maxPerIp}
+  THEN RAISE(ABORT,'You already have the maximum number of active demos.') END;
+  SELECT CASE WHEN (
+    SELECT COUNT(*) FROM launches
+    WHERE ip_address=NEW.ip_address
+      AND created_at > CAST(strftime('%s','now') AS INTEGER)-3600
+  ) >= ${maxPerHour}
+  THEN RAISE(ABORT,'Hourly launch limit reached. Please try again later.') END;
+END;
+CREATE TRIGGER demopress_public_launch_log
+AFTER INSERT ON demos
+WHEN NEW.demo_type='public'
+BEGIN
+  INSERT INTO launches(ip_address,created_at)
+  VALUES(NEW.ip_address,CAST(strftime('%s','now') AS INTEGER));
+END;
+`);
+
 const now=Math.floor(Date.now()/1000);
 try{db.prepare(`INSERT OR IGNORE INTO presets(slug,name,description,start_path,is_enabled,is_default,created_at,updated_at) VALUES('default','Default','Existing DemoPress golden-template configuration.','/wp-admin/',1,1,?,?)`).run(now,now)}catch(e){console.warn("Unable to initialise default preset:",e.message)}
 try{db.exec(`CREATE VIEW IF NOT EXISTS provisioning_events AS SELECT id,demo_id,CAST(created_at_ms / 1000 AS INTEGER) AS created_at,created_at_ms,stage,level,message FROM events;`)}catch(e){console.warn("Unable to create provisioning_events compatibility view:",e.message)}
