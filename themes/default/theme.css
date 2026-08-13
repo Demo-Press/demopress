@@ -1,1 +1,248 @@
-:root{--bg:#f5f5f2;--fg:#101010;--muted:#666;--line:#d8d8d2;--brand:#111}body{background:linear-gradient(180deg,#fff,#f5f5f2)}.brand span{opacity:.5}.hero .eyebrow{color:#666}.card{background:rgba(255,255,255,.7)}
+:root{
+  --bg:#f7f7f5;
+  --fg:#111111;
+  --muted:#686868;
+  --line:#deded8;
+  --brand:#111111;
+  --panel:#ffffff;
+  --panel-solid:#ffffff;
+  --radius:20px;
+  --radius-sm:13px;
+  --shadow:0 10px 36px rgba(20,20,20,.06);
+  --focus:0 0 0 3px rgba(17,17,17,.12);
+}
+
+body{
+  background:#f7f7f5;
+  color:#111;
+  letter-spacing:-.01em;
+}
+
+.ambient{display:none}
+
+.wrap{
+  max-width:1180px;
+  padding:0 24px 54px;
+}
+
+.top{
+  position:sticky;
+  top:0;
+  z-index:40;
+  min-height:74px;
+  padding:0;
+  gap:28px;
+  background:rgba(247,247,245,.94);
+  border-bottom:1px solid rgba(222,222,216,.92);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+
+.brand{
+  font-size:14px;
+  font-weight:950;
+  letter-spacing:.105em;
+  line-height:1;
+}
+
+.brand span{
+  display:block;
+  margin-top:6px;
+  color:#777;
+  font-size:9px;
+  font-weight:650;
+  letter-spacing:.17em;
+  opacity:1;
+}
+
+.public-nav{
+  gap:3px;
+}
+
+.public-nav a{
+  color:#5f5f5f;
+  padding:9px 12px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:720;
+}
+
+.public-nav a:hover{
+  background:#e9e9e5;
+  color:#111;
+}
+
+.hero{
+  max-width:980px;
+  padding:108px 0 64px;
+}
+
+.eyebrow,.label{
+  color:#747474;
+  font-size:11px;
+  font-weight:850;
+  letter-spacing:.13em;
+}
+
+.hero h1{
+  max-width:960px;
+  margin:17px 0 24px;
+  color:#111;
+  font-size:clamp(56px,8.2vw,94px);
+  font-weight:900;
+  line-height:.94;
+  letter-spacing:-.065em;
+}
+
+.hero p{
+  max-width:790px;
+  margin:0 0 28px;
+  color:#686868;
+  font-size:20px;
+  line-height:1.68;
+}
+
+h1,h2,h3{
+  letter-spacing:-.045em;
+}
+
+.btn{
+  min-height:48px;
+  padding:13px 18px;
+  border:1px solid #111;
+  border-radius:12px;
+  background:#111;
+  color:#fff;
+  font-weight:820;
+  box-shadow:none;
+}
+
+.btn:hover{
+  background:#000;
+  opacity:1;
+  transform:translateY(-1px);
+  box-shadow:0 10px 24px rgba(0,0,0,.14);
+}
+
+.btn.secondary{
+  background:#fff;
+  color:#111;
+  border-color:#c8c8c1;
+}
+
+.btn.secondary:hover{
+  background:#f1f1ee;
+  border-color:#bdbdb5;
+}
+
+.actions{
+  gap:9px;
+}
+
+.card{
+  background:#fff;
+  border:1px solid #deded8;
+  border-radius:20px;
+  box-shadow:0 1px 0 rgba(255,255,255,.8);
+  backdrop-filter:none;
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+
+.card:hover{
+  transform:translateY(-2px);
+  border-color:#bdbdb5;
+  box-shadow:0 10px 36px rgba(20,20,20,.06);
+}
+
+.progress-shell{
+  height:9px;
+  background:#e4e4df;
+}
+
+.progress-fill{
+  background:#111;
+}
+
+.step{
+  background:#fff;
+  border-color:#deded8;
+  border-radius:13px;
+}
+
+.step.active{
+  background:#f0f0ed;
+  border-color:#111;
+  color:#111;
+}
+
+.step.done{
+  background:#111;
+  border-color:#111;
+  color:#fff;
+}
+
+.credential{
+  background:#fff;
+  border-color:#deded8;
+  border-radius:13px;
+}
+
+.credential span{
+  color:#747474;
+}
+
+.credential button{
+  color:#111;
+}
+
+.capture-field input{
+  min-height:50px;
+  background:#fff;
+  border-color:#deded8;
+  border-radius:12px;
+}
+
+.capture-field input:focus{
+  border-color:#111;
+  box-shadow:0 0 0 3px rgba(17,17,17,.12);
+}
+
+.capture-error{
+  border-color:#e5c8c8;
+  background:#fff3f3;
+  color:#9a3838;
+}
+
+.live-dot i{
+  background:#2f7d4f;
+  box-shadow:0 0 0 5px rgba(47,125,79,.12);
+}
+
+.terminal{
+  background:#080808;
+  color:#d7d7d2;
+  border-color:#292929;
+  border-radius:18px;
+  box-shadow:0 24px 70px rgba(0,0,0,.14);
+}
+
+.publicfooter{
+  margin-top:64px;
+  padding:30px 0 4px;
+  color:#818181;
+  border-top:1px solid #deded8;
+}
+
+@media(max-width:760px){
+  .wrap{padding:0 14px 38px}
+  .top{min-height:68px;padding:12px 0;display:grid;grid-template-columns:1fr}
+  .brand span{font-size:8px;letter-spacing:.14em}
+  .public-nav{margin:2px 0 0;padding-bottom:2px;gap:4px}
+  .public-nav a{background:#fff;border:1px solid #deded8;border-radius:11px;padding:10px 12px}
+  .hero{padding:72px 0 46px}
+  .hero h1{font-size:clamp(47px,15vw,70px);letter-spacing:-.06em}
+  .hero p{font-size:17px;line-height:1.62}
+  .actions{display:grid}
+  .actions .btn,.actions button.btn,.actions a.btn{width:100%}
+  .card{padding:19px;border-radius:17px}
+}
