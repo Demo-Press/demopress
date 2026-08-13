@@ -1,0 +1,5 @@
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .btn, .card, .progress-fill { transition: none !important; }
+  .btn:hover, .card:hover { transform: none !important; }
+}
