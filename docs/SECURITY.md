@@ -3,7 +3,7 @@
 DemoPress is a high-trust control plane because it creates and destroys Docker containers.
 
 ## Manager
-- `/manage` uses HTTP Basic Authentication.
+- `/manage` uses a dedicated DemoPress sign-in page backed by `ADMIN_PASSWORD` and a signed Manager session cookie.
 - Placeholder admin passwords are rejected.
 - All Manager POST actions require a CSRF token.
 - Manager and demo credential pages use `Cache-Control: no-store`.
