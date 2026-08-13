@@ -3,7 +3,7 @@ function n(k,d){const v=Number(process.env[k]);return Number.isFinite(v)?v:d}
 function b(k,d=false){const v=process.env[k];if(v==null||v==='')return d;return ['1','true','yes','on'].includes(String(v).toLowerCase())}
 const domain=(process.env.DOMAIN||"demo.example.test").toLowerCase().replace(/^https?:\/\//,"").replace(/\/$/,"");
 module.exports={
-  platformVersion:"1.0.0",
+  platformVersion:"1.0.0",buildVersion:"1.0.0",
   port:3000,domain,
   templateDomain:(process.env.TEMPLATE_DOMAIN||`template.${domain}`).replace(/^https?:\/\//,"").replace(/\/$/,""),
   instanceId:domain,
