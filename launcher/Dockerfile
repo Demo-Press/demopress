@@ -4,9 +4,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl tar gzip p
 COPY launcher/package.json ./
 RUN npm install --omit=dev
 COPY launcher/src ./src
+COPY launcher/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 COPY themes /app/themes
 COPY profiles /app/profiles
 COPY demo /opt/demopress/demo-build
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["node","src/server.js"]
+CMD ["./entrypoint.sh"]
