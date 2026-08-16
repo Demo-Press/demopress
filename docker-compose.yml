@@ -8,6 +8,9 @@ services:
       DOMAIN: ${DOMAIN}
       TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
       DEMOPRESS_THEME: ${DEMOPRESS_THEME:-default}
+      DEMOPRESS_THEME_URL: ${DEMOPRESS_THEME_URL:-}
+      DEMOPRESS_THEME_REF: ${DEMOPRESS_THEME_REF:-main}
+      DEMOPRESS_THEME_TOKEN: ${DEMOPRESS_THEME_TOKEN:-}
       DEMOPRESS_PROFILE: ${DEMOPRESS_PROFILE:-default}
       DEFAULT_DEMO_LIFETIME: ${DEFAULT_DEMO_LIFETIME:-7200}
       MAX_DEMO_LIFETIME: ${MAX_DEMO_LIFETIME:-43200}
@@ -100,8 +103,6 @@ volumes:
 
 networks:
   public:
-    name: ${DOCKER_NETWORK:-coolify}
     external: true
   template_internal:
-    driver: bridge
     internal: true
