@@ -5,7 +5,7 @@ DemoPress is a self-hosted platform for creating private, disposable WordPress p
 ## Core model
 
 - One generic launcher/runtime codebase.
-- `DEMOPRESS_THEME` selects launcher branding.
+- `DEMOPRESS_THEME` selects launcher branding from a bundled or externally supplied theme.
 - `DEMOPRESS_PROFILE` selects required WordPress plugins/theme and product copy.
 - Golden-template exports become candidate snapshots containing `database.sql`, `content.tar.gz`, optional `uploads.tar.gz` and `manifest.json`.
 - Candidate snapshots are validated with an isolated disposable test before promotion for public use.
@@ -59,11 +59,7 @@ The access policy is stored in the golden WordPress database, so it automaticall
 
 ## Visitor capture
 
-Visitor capture is independent of email delivery. In **Manager → Visitor Capture** you can configure Name, Email, Company and Website individually as:
-
-- Off
-- Optional
-- Required
+Visitor capture is independent of email delivery. In **Manager → Visitor Capture** you can configure Name, Email, Company and Website individually as Off, Optional or Required.
 
 Captured values are stored against the demo for Manager/analytics use whether or not an email service is configured.
 
@@ -96,30 +92,50 @@ The public launcher supports `?preset=<slug>` and shows a selector when multiple
 
 Manager includes product-neutral Demo Experience controls for disposable environments. These can provide temporary-demo context such as a toolbar, expiry information, documentation/product links and optional WordPress notice suppression without modifying the demonstrated product configuration.
 
-## Profiles and themes
+## Profiles and launcher themes
 
-To add another product deployment, create a product-neutral profile and optional launcher theme:
+To add another product deployment, create a product-neutral profile and choose either a bundled or externally supplied launcher theme.
+
+Bundled files use:
 
 - `profiles/<name>.json`
 - `themes/<name>/theme.json`
 - `themes/<name>/theme.css`
 
-A starter theme is available under `themes/template`.
+A starter launcher theme is available under `themes/template`.
 
-Deploy with:
+Deploy a bundled theme with:
 
 ```env
 DEMOPRESS_PROFILE=<name>
 DEMOPRESS_THEME=<name>
 ```
 
-Product files themselves are carried by snapshots rather than separate runtime images.
+### Private / external launcher themes
+
+Product-specific launcher branding does not need to be committed to the public DemoPress repository. DemoPress can download a theme archive when the launcher container starts, install it into `/app/themes/<DEMOPRESS_THEME>`, validate that it contains `theme.json`, and then start normally.
+
+For a private GitHub repository:
+
+```env
+DEMOPRESS_PROFILE=wpraffle
+DEMOPRESS_THEME=wpraffle
+DEMOPRESS_THEME_URL=https://api.github.com/repos/OWNER/PRIVATE-THEME-REPO/tarball/main
+DEMOPRESS_THEME_REF=main
+DEMOPRESS_THEME_TOKEN=YOUR_READ_ONLY_TOKEN
+```
+
+`DEMOPRESS_THEME_URL` is optional. When it is empty, DemoPress uses the matching bundled theme under `themes/` as before. `DEMOPRESS_THEME_REF` defaults to `main` and is available for deployment-specific theme references. `DEMOPRESS_THEME_TOKEN` is optional for public archives but should be supplied as a deployment secret for private GitHub repositories. The downloader sends it in the `Authorization: Bearer` header; do not embed credentials in the URL or commit tokens to source control.
+
+The downloaded archive may contain a top-level repository directory. DemoPress locates the theme by finding `theme.json`, copies that theme directory into the selected launcher theme location and refuses to start if a valid theme cannot be found. This fail-closed behaviour prevents a private-branded deployment silently falling back to unintended branding after a failed download.
+
+Keep private/commercial launcher themes in their own private repositories when they should not be distributed with DemoPress. This is separate from the WordPress theme demonstrated to visitors: WordPress plugins, themes and content still come from validated golden-template snapshots.
 
 ## Manager authentication and security
 
 `/manage` uses a dedicated DemoPress sign-in page backed by the configured Manager password and a signed session cookie. Manager write actions are protected by authentication, CSRF validation and same-origin checks.
 
-Use HTTPS for both launcher and template domains. Keep Manager, Agent, database and mail-provider credentials in deployment secrets rather than profile JSON or source control.
+Use HTTPS for both launcher and template domains. Keep Manager, Agent, database, mail-provider and private-theme credentials in deployment secrets rather than profile JSON or source control.
 
 ## Useful checks
 
@@ -136,8 +152,9 @@ Before considering a deployment complete, verify:
 - Protected WordPress platform areas return access denied for the demo user.
 - Visitor-capture requirements match your privacy/lead-capture policy.
 - Resend delivery works if enabled.
+- An external launcher theme downloads and validates successfully if configured.
 - Manager diagnostics show no unexpected orphan resources.
 
 ## Runtime image
 
-DemoPress intentionally uses one generic runtime image. Product-specific plugins, themes, uploads and database state come from snapshots. Avoid maintaining separate product-specific DemoPress runtime repositories or images unless you have a specific infrastructure reason to do so.
+DemoPress intentionally uses one generic runtime image. Product-specific plugins, themes, uploads and database state come from snapshots. Launcher themes are presentation assets and may be bundled or downloaded separately at launcher startup. Avoid maintaining separate product-specific DemoPress runtime repositories or images unless you have a specific infrastructure reason to do so.
