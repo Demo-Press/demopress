@@ -104,5 +104,6 @@ volumes:
 networks:
   public:
     external: true
+    name: ${DOCKER_NETWORK:-coolify}
   template_internal:
     internal: true
