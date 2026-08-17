@@ -8,8 +8,8 @@ THEME_TOKEN="${DEMOPRESS_THEME_TOKEN:-}"
 THEME_ROOT="/app/themes"
 
 # Optional runtime theme download. This keeps branded/private launcher themes
-# outside the public DemoPress repository while preserving bundled themes as
-# the default behaviour.
+# outside the DemoPress repository while preserving bundled themes as the
+# default behaviour.
 if [ -n "$THEME_URL" ]; then
   case "$THEME_NAME" in
     *[!A-Za-z0-9_-]*|'')
@@ -37,18 +37,23 @@ if [ -n "$THEME_URL" ]; then
     curl --fail --silent --show-error --location --output "$archive" "$url"
   fi
 
-  # External themes are expected as .tar.gz/.tgz archives with a single
-  # repository root directory (GitHub tarballs use this layout).
+  # GitHub tarballs contain one generated repository root. A shared themes
+  # repository stores each theme at themes/<name>; a theme-only archive may
+  # retain theme.json at its root for backwards compatibility.
   tar -xzf "$archive" -C "$staging" --strip-components=1
+  source_dir="$staging/themes/$THEME_NAME"
+  if [ ! -f "$source_dir/theme.json" ] && [ -f "$staging/theme.json" ]; then
+    source_dir="$staging"
+  fi
 
-  if [ ! -f "$staging/theme.json" ]; then
-    echo "DemoPress: external theme archive does not contain theme.json at its root" >&2
+  if [ ! -f "$source_dir/theme.json" ]; then
+    echo "DemoPress: external archive does not contain themes/$THEME_NAME/theme.json or root theme.json" >&2
     exit 1
   fi
 
   rm -rf "$target"
   mkdir -p "$target"
-  cp -R "$staging"/. "$target"/
+  cp -R "$source_dir"/. "$target"/
   echo "DemoPress: external launcher theme '$THEME_NAME' installed."
 fi
 
