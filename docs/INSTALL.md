@@ -59,6 +59,18 @@ Generate suitable random values with:
 
 `ADMIN_PASSWORD`, `INTERNAL_TEMPLATE_TOKEN` and database passwords are secrets and must not be committed.
 
+For the WPRaffle deployment, also configure the private launcher theme source:
+
+```env
+DEMOPRESS_PROFILE=wpraffle
+DEMOPRESS_THEME=wpraffle
+DEMOPRESS_THEME_URL=https://api.github.com/repos/Demo-Press/demopress-themes/tarball/{ref}
+DEMOPRESS_THEME_REF=main
+DEMOPRESS_THEME_TOKEN=
+```
+
+Store `DEMOPRESS_THEME_TOKEN` as a deployment secret. It must be a fine-grained GitHub token with read-only Contents access to `Demo-Press/demopress-themes`. Do not commit the token or include it in `DEMOPRESS_THEME_URL`. Generic deployments that use a bundled theme do not need these external-theme values.
+
 The launcher listens on port 3000 inside its container. In Coolify, application routing should expose the service; a separate `PORT` environment variable is not required.
 
 ## 4. Runtime image

@@ -113,23 +113,25 @@ DEMOPRESS_THEME=<name>
 
 ### Private / external launcher themes
 
-Product-specific launcher branding does not need to be committed to the public DemoPress repository. DemoPress can download a theme archive when the launcher container starts, install it into `/app/themes/<DEMOPRESS_THEME>`, validate that it contains `theme.json`, and then start normally.
+Product-specific launcher branding does not need to be committed to the DemoPress core repository. DemoPress can download a theme archive when the launcher container starts, install the selected theme into `/app/themes/<DEMOPRESS_THEME>`, validate that it contains `theme.json`, and then start normally.
 
-For a private GitHub repository:
+WPRaffle uses the private [`Demo-Press/demopress-themes`](https://github.com/Demo-Press/demopress-themes) repository:
 
 ```env
 DEMOPRESS_PROFILE=wpraffle
 DEMOPRESS_THEME=wpraffle
-DEMOPRESS_THEME_URL=https://api.github.com/repos/OWNER/PRIVATE-THEME-REPO/tarball/main
+DEMOPRESS_THEME_URL=https://api.github.com/repos/Demo-Press/demopress-themes/tarball/{ref}
 DEMOPRESS_THEME_REF=main
-DEMOPRESS_THEME_TOKEN=YOUR_READ_ONLY_TOKEN
+DEMOPRESS_THEME_TOKEN=
 ```
 
-`DEMOPRESS_THEME_URL` is optional. When it is empty, DemoPress uses the matching bundled theme under `themes/` as before. `DEMOPRESS_THEME_REF` defaults to `main` and is available for deployment-specific theme references. `DEMOPRESS_THEME_TOKEN` is optional for public archives but should be supplied as a deployment secret for private GitHub repositories. The downloader sends it in the `Authorization: Bearer` header; do not embed credentials in the URL or commit tokens to source control.
+Set `DEMOPRESS_THEME_TOKEN` only in deployment secrets. Use a fine-grained GitHub token with read-only Contents access to `Demo-Press/demopress-themes`; never embed it in the URL or commit it. The downloader sends it in the `Authorization: Bearer` header.
 
-The downloaded archive may contain a top-level repository directory. DemoPress locates the theme by finding `theme.json`, copies that theme directory into the selected launcher theme location and refuses to start if a valid theme cannot be found. This fail-closed behaviour prevents a private-branded deployment silently falling back to unintended branding after a failed download.
+`DEMOPRESS_THEME_URL` is optional for deployments that use bundled generic themes. `DEMOPRESS_THEME_REF` defaults to `main`, and a `{ref}` placeholder in the URL is replaced at startup. Pinning a tag or commit through this variable is supported when deployments need immutable theme releases.
 
-Keep private/commercial launcher themes in their own private repositories when they should not be distributed with DemoPress. This is separate from the WordPress theme demonstrated to visitors: WordPress plugins, themes and content still come from validated golden-template snapshots.
+A shared archive stores themes under `themes/<DEMOPRESS_THEME>/`. Theme-only archives with `theme.json` at their root remain supported for backwards compatibility. DemoPress selects only the configured theme and refuses to start if it is absent, preventing a private-branded deployment from silently falling back after a failed download.
+
+This launcher branding is separate from the WordPress theme demonstrated to visitors: WordPress plugins, themes and content still come from validated golden-template snapshots.
 
 ## Manager authentication and security
 
