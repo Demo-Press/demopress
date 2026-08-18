@@ -4,7 +4,6 @@ cd /var/www/html
 
 log(){ echo "[DIAG] $*"; }
 fail(){ log "ERROR $*"; exit 1; }
-
 wp_safe(){ timeout -k 2s 45s wp --allow-root --skip-plugins --skip-themes "$@"; }
 
 log "finaliser-start $(date -Iseconds)"
@@ -85,23 +84,7 @@ log "START demo-role-and-user"
 USER="${DEMOPRESS_DEMO_USER:-demo_user}"
 PASS="${DEMOPRESS_DEMO_PASSWORD:-demo_password}"
 export DEMOPRESS_DEMO_USER="$USER" DEMOPRESS_DEMO_PASSWORD="$PASS"
-mkdir -p /tmp/demopress
-cat > /tmp/demopress/apply-access.php <<'PHP'
-<?php
-$policy=get_option('demopress_demo_access',[]);if(!is_array($policy))$policy=[];
-$base=sanitize_key($policy['base_role']??'administrator');$base_role=get_role($base);
-if(!$base_role){$base='administrator';$base_role=get_role('administrator');}
-if(!$base_role){fwrite(STDERR,"No usable WordPress baseline role found\n");exit(2);}
-$caps=[];foreach((array)$base_role->capabilities as $cap=>$allowed){if($allowed)$caps[$cap]=true;}
-$blocked=['activate_plugins','deactivate_plugins','delete_plugins','edit_plugins','install_plugins','update_plugins','switch_themes','delete_themes','edit_themes','install_themes','update_themes','edit_files','edit_users','create_users','delete_users','list_users','promote_users','remove_users','update_core','import','export'];
-foreach($blocked as $cap)unset($caps[$cap]);$caps['read']=true;$caps['demopress_demo_user']=true;
-remove_role('demopress_demo_admin');add_role('demopress_demo_admin','DemoPress Demo User',$caps);
-$user_login=(string)getenv('DEMOPRESS_DEMO_USER');$password=(string)getenv('DEMOPRESS_DEMO_PASSWORD');
-if($user_login===''||$password===''){fwrite(STDERR,"Demo credentials missing\n");exit(3);}
-$user=get_user_by('login',$user_login);if(!$user){$id=wp_create_user($user_login,$password,$user_login.'@example.invalid');if(is_wp_error($id)){fwrite(STDERR,$id->get_error_message()."\n");exit(4);}$user=get_user_by('id',$id);}else{wp_set_password($password,$user->ID);}
-$user->set_role('demopress_demo_admin');update_user_meta($user->ID,'demopress_demo_user',1);update_option('demopress_demo_access_effective_role','demopress_demo_admin',false);echo 'base='.$base.' role=demopress_demo_admin user='.$user_login."\n";
-PHP
-ROLE_OUT=$(timeout -k 2s 45s wp eval-file /tmp/demopress/apply-access.php --allow-root --skip-plugins --skip-themes 2>&1) || fail "demo access role creation failed: $ROLE_OUT"
+ROLE_OUT=$(timeout -k 2s 45s wp eval-file /usr/local/share/demopress/personalise.php --allow-root --skip-plugins --skip-themes 2>&1) || fail "demo access role creation failed: $ROLE_OUT"
 log "demo-access $ROLE_OUT"
 
 mkdir -p wp-content/mu-plugins
@@ -109,8 +92,18 @@ cat > wp-content/mu-plugins/demopress-demo-guard.php <<'PHP'
 <?php
 if(!defined('ABSPATH'))exit;
 function demopress_guard_is_demo_user(){return is_user_logged_in()&&current_user_can('demopress_demo_user');}
-add_filter('map_meta_cap',function($caps,$cap,$user_id,$args){$user=get_userdata($user_id);if(!$user||empty($user->allcaps['demopress_demo_user']))return $caps;$blocked=['activate_plugins','deactivate_plugins','delete_plugins','edit_plugins','install_plugins','update_plugins','switch_themes','delete_themes','edit_themes','install_themes','update_themes','edit_files','edit_users','create_users','delete_users','list_users','promote_users','remove_users','update_core','import','export'];if(in_array($cap,$blocked,true))return ['do_not_allow'];return $caps;},999,4);
-add_action('admin_init',function(){if(!demopress_guard_is_demo_user())return;global $pagenow;$page=isset($_GET['page'])?sanitize_key(wp_unslash($_GET['page'])):'';if($page==='demopress-agent')wp_die('DemoPress platform settings are not available in disposable demos.','Access denied',['response'=>403]);$blocked_pages=['plugin-install.php','plugins.php','plugin-editor.php','theme-install.php','themes.php','theme-editor.php','update-core.php','users.php','user-new.php','import.php','export.php'];if(in_array($pagenow,$blocked_pages,true))wp_die('This platform-level WordPress area is not available in the demo environment.','Access denied',['response'=>403]);},0);
+function demopress_guard_policy(){$p=get_option('demopress_demo_access',[]);return is_array($p)?$p:[];}
+function demopress_guard_blocked_caps(){
+  $p=demopress_guard_policy();$caps=['activate_plugins','deactivate_plugins','delete_plugins','edit_plugins','install_plugins','update_plugins','delete_themes','edit_themes','install_themes','update_themes','edit_files','edit_users','create_users','delete_users','list_users','promote_users','remove_users','update_core','import','export'];
+  if(empty($p['allow_theme_switching']))$caps[]='switch_themes';return $caps;
+}
+add_filter('map_meta_cap',function($caps,$cap,$user_id,$args){$user=get_userdata($user_id);if(!$user||empty($user->allcaps['demopress_demo_user']))return $caps;if(in_array($cap,demopress_guard_blocked_caps(),true))return ['do_not_allow'];return $caps;},999,4);
+add_action('admin_init',function(){
+  if(!demopress_guard_is_demo_user())return;global $pagenow;$page=isset($_GET['page'])?sanitize_key(wp_unslash($_GET['page'])):'';
+  if($page==='demopress-agent')wp_die('DemoPress platform settings are not available in disposable demos.','Access denied',['response'=>403]);
+  $blocked_pages=['plugin-install.php','plugins.php','plugin-editor.php','theme-install.php','theme-editor.php','update-core.php','users.php','user-new.php','import.php','export.php'];
+  if(in_array($pagenow,$blocked_pages,true))wp_die('This platform-level WordPress area is protected in the demo environment.','Access denied',['response'=>403]);
+},0);
 PHP
 
 cat > wp-content/mu-plugins/demopress-demo-experience.php <<'PHP'
