@@ -12,6 +12,7 @@ COPY setup/finalise-clone.sh /usr/local/bin/finalise-clone.sh
 COPY setup/personalise.php /usr/local/share/demopress/personalise.php
 COPY setup/demopress-entrypoint.sh /usr/local/bin/demopress-entrypoint.sh
 COPY config/php/wordpress.ini /usr/local/etc/php/conf.d/wordpress.ini
+COPY security.conf /etc/apache2/conf-enabled/demopress-security.conf
 
 RUN chmod +x /usr/local/bin/finalise-clone.sh /usr/local/bin/demopress-entrypoint.sh
 
