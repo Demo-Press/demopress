@@ -79,7 +79,7 @@ async function exec(c,cmd,env=[],options={}){
 }
 
 async function startDetached(c,cmd,env=[]){
-  const e=await c.exec({Cmd:["sh","-lc",cmd],AttachStdout:false,AttachStderr:false});
+  const e=await c.exec({Cmd:["sh","-lc",cmd],AttachStdout:false,AttachStderr:false,Env:env});
   await e.start({Detach:true,Tty:false});
   return e;
 }
