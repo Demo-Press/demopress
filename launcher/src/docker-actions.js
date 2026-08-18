@@ -4,8 +4,27 @@ const {PassThrough}=require("stream");
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 async function logs(c,n=300){
-  try{return String(await c.logs({stdout:true,stderr:true,tail:n,timestamps:false}))}
-  catch(_){return ""}
+  try{
+    const raw=await c.logs({stdout:true,stderr:true,tail:n,timestamps:false});
+    // Docker returns non-TTY container logs as a multiplexed stream. Converting
+    // that buffer directly to a string exposes the 8-byte stream headers as
+    // binary garbage in Manager diagnostics. Demultiplex it first.
+    if(!raw||!raw.length)return "";
+    const stdout=new PassThrough(),stderr=new PassThrough();
+    let out="";
+    stdout.on("data",d=>out+=d.toString("utf8"));
+    stderr.on("data",d=>out+=d.toString("utf8"));
+    const source=new PassThrough();
+    c.modem.demuxStream(source,stdout,stderr);
+    source.end(raw);
+    await new Promise(resolve=>{
+      let pending=2;
+      const done=()=>{if(--pending<=0)resolve()};
+      stdout.on("end",done);stderr.on("end",done);
+      setImmediate(()=>{stdout.end();stderr.end()});
+    });
+    return out;
+  }catch(_){return ""}
 }
 
 /**
@@ -60,7 +79,7 @@ async function exec(c,cmd,env=[],options={}){
 }
 
 async function startDetached(c,cmd,env=[]){
-  const e=await c.exec({Cmd:["sh","-lc",cmd],AttachStdout:false,AttachStderr:false,Env:env});
+  const e=await c.exec({Cmd:["sh","-lc",cmd],AttachStdout:false,AttachStderr:false});
   await e.start({Detach:true,Tty:false});
   return e;
 }
