@@ -45,17 +45,20 @@ Demo-user permissions are configured on the **golden WordPress template**, becau
 
 Open **Settings → DemoPress Agent → Demo user access** and configure:
 
-- **Baseline role** — the WordPress role whose normal product capabilities should be copied into the disposable demo role.
+- **Baseline role** — the WordPress role whose normal product capabilities should be used as the starting point for the disposable demo role.
 - **Admin menu restriction** — optionally enable a top-level admin-area whitelist.
-- **Allowed admin areas** — choose the WordPress/plugin menus visitors should be able to access.
+- **Top-level admin areas** — choose the WordPress/plugin menus visitors should be able to access.
+- **Installed-theme switching** — optionally allow visitors to switch between themes already present in the validated snapshot.
+
+The Agent labels discovered WordPress admin areas as **Allowed**, **Limited** or **Protected**. Protected platform-management areas cannot be selected, so the configuration shown on the golden template matches what a visitor can actually use in the resulting demo. Appearance/Themes is a limited area: it can be exposed safely while theme installation, upload, deletion, updating and code editing remain blocked. Installed-theme switching is a separate explicit option.
 
 Plugin menu items are discovered from the golden template, so install and activate the product before configuring the whitelist.
 
-When a disposable demo is created, DemoPress builds a dedicated `demopress_demo_admin` role from the selected baseline. It then removes platform-dangerous capabilities such as plugin/theme installation or editing, WordPress core updates and user administration. The temporary user is assigned to this generated role rather than being made a normal Administrator.
+When a disposable demo is created, DemoPress builds a dedicated `demopress_demo_admin` role from the selected baseline. It removes platform-dangerous capabilities such as plugin management, theme installation/editing, WordPress core updates and user administration. If installed-theme switching is explicitly enabled, only `switch_themes` is restored; the destructive theme-management capabilities remain protected. The temporary user is assigned to this generated role rather than being made a normal Administrator.
 
-The Agent enforces the selected menu policy in disposable-demo mode, while a clone-side MU security guard blocks DemoPress platform settings and dangerous WordPress platform URLs even if the baseline role is broad.
+The Agent and clone-side MU security guard use the same saved access policy. Protected WordPress platform URLs remain blocked even if the baseline role is broad, while safe limited areas such as Appearance can remain available when selected.
 
-The access policy is stored in the golden WordPress database, so it automatically travels with snapshot exports.
+The access policy is stored in the golden WordPress database, so it automatically travels with snapshot exports. After changing access settings, export and validate a **new candidate snapshot**; existing snapshots keep the access policy they were created with.
 
 ## Visitor capture
 
@@ -145,12 +148,14 @@ Before considering a deployment complete, verify:
 
 - Template validation passes.
 - Agent secret is configured.
-- Demo user baseline role and allowed menus are intentional.
+- Demo user baseline role, access-state labels, allowed menus and installed-theme switching setting are intentional.
+- A newly exported snapshot reflects the latest Agent access policy.
 - The intended snapshot has passed isolated validation and has been promoted.
 - Public presets reference the intended validated snapshot.
 - A test demo reaches **Ready** only after clone finalisation succeeds.
 - Public demo URL works through HTTPS.
 - One-click Admin signs in as the generated DemoPress demo role.
+- Allowed and limited WordPress areas behave as described by the Agent UI.
 - Protected WordPress platform areas return access denied for the demo user.
 - Visitor-capture requirements match your privacy/lead-capture policy.
 - Resend delivery works if enabled.
