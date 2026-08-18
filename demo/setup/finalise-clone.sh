@@ -17,9 +17,22 @@ done
 log "END wordpress-files"
 
 log "START wordpress-config"
-if [ ! -f wp-config.php ]; then
-  timeout -k 2s 30s wp config create --allow-root --dbname="$WORDPRESS_DB_NAME" --dbuser="$WORDPRESS_DB_USER" --dbpass="$WORDPRESS_DB_PASSWORD" --dbhost="$WORDPRESS_DB_HOST" --skip-check || fail "wp-config create failed"
+if [ -f wp-config.php ]; then
+  log "wp-config.php already exists; using existing configuration"
+else
+  log "wp-config.php not present; creating configuration"
+  if timeout -k 2s 30s wp config create --allow-root --dbname="$WORDPRESS_DB_NAME" --dbuser="$WORDPRESS_DB_USER" --dbpass="$WORDPRESS_DB_PASSWORD" --dbhost="$WORDPRESS_DB_HOST" --skip-check; then
+    log "wp-config.php created by clone finaliser"
+  elif [ -f wp-config.php ]; then
+    # The official WordPress Docker entrypoint can create wp-config.php between
+    # our existence check and `wp config create`. Treat that as a successful
+    # hand-off rather than failing an otherwise healthy clone.
+    log "wp-config.php appeared during creation; using Docker-generated configuration"
+  else
+    fail "wp-config create failed"
+  fi
 fi
+[ -s wp-config.php ] || fail "wp-config.php missing or empty after configuration stage"
 PREFIX="${WORDPRESS_TABLE_PREFIX:-}"
 if [ -z "$PREFIX" ] && [ -f /snapshot/database.sql ]; then PREFIX=$(sed -n 's/^CREATE TABLE `\([^`]*\)options`.*/\1/p' /snapshot/database.sql | head -1 || true); fi
 [ -n "$PREFIX" ] || PREFIX="wp_"
