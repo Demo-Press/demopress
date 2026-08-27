@@ -5,8 +5,8 @@ services:
       dockerfile: launcher/Dockerfile
     restart: unless-stopped
     environment:
-      DOMAIN: ${DOMAIN}
-      TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+      TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN:?TEMPLATE_DOMAIN is required}
       DEMOPRESS_THEME: ${DEMOPRESS_THEME:-default}
       DEMOPRESS_THEME_URL: ${DEMOPRESS_THEME_URL:-}
       DEMOPRESS_THEME_REF: ${DEMOPRESS_THEME_REF:-main}
@@ -24,8 +24,8 @@ services:
       DOCKER_NETWORK: ${DOCKER_NETWORK:-coolify}
       TRAEFIK_ENTRYPOINTS: ${TRAEFIK_ENTRYPOINTS:-http,https}
       TRAEFIK_CERTRESOLVER: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN:?INTERNAL_TEMPLATE_TOKEN is required}
       DEMO_IMAGE: ${DEMO_IMAGE:-demopress-wordpress:1.0}
       SNAPSHOT_ROOT: ${SNAPSHOT_ROOT:-/data/snapshots}
       MAX_SNAPSHOTS: ${MAX_SNAPSHOTS:-5}
@@ -62,19 +62,19 @@ services:
     environment:
       WORDPRESS_DB_HOST: template-db:3306
       WORDPRESS_DB_USER: demopress
-      WORDPRESS_DB_PASSWORD: ${TEMPLATE_DB_PASSWORD:-demopress-template-db}
+      WORDPRESS_DB_PASSWORD: ${TEMPLATE_DB_PASSWORD:?TEMPLATE_DB_PASSWORD is required}
       WORDPRESS_DB_NAME: demopress
       DEMOPRESS_MODE: template
-      DEMOPRESS_TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN}
+      DEMOPRESS_TEMPLATE_DOMAIN: ${TEMPLATE_DOMAIN:?TEMPLATE_DOMAIN is required}
       WORDPRESS_CONFIG_EXTRA: |
         define('DEMOPRESS_MODE', 'template');
-        define('DEMOPRESS_TEMPLATE_DOMAIN', '${TEMPLATE_DOMAIN}');
-        define('WP_HOME', 'https://${TEMPLATE_DOMAIN}');
-        define('WP_SITEURL', 'https://${TEMPLATE_DOMAIN}');
+        define('DEMOPRESS_TEMPLATE_DOMAIN', '${TEMPLATE_DOMAIN:?TEMPLATE_DOMAIN is required}');
+        define('WP_HOME', 'https://${TEMPLATE_DOMAIN:?TEMPLATE_DOMAIN is required}');
+        define('WP_SITEURL', 'https://${TEMPLATE_DOMAIN:?TEMPLATE_DOMAIN is required}');
         if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos($$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false) {
           $$_SERVER['HTTPS'] = 'on';
         }
-      INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN}
+      INTERNAL_TEMPLATE_TOKEN: ${INTERNAL_TEMPLATE_TOKEN:?INTERNAL_TEMPLATE_TOKEN is required}
     volumes:
       - demopress_template_wp:/var/www/html
     depends_on:
@@ -89,8 +89,8 @@ services:
     environment:
       MARIADB_DATABASE: demopress
       MARIADB_USER: demopress
-      MARIADB_PASSWORD: ${TEMPLATE_DB_PASSWORD:-demopress-template-db}
-      MARIADB_ROOT_PASSWORD: ${TEMPLATE_DB_ROOT_PASSWORD:-demopress-template-root}
+      MARIADB_PASSWORD: ${TEMPLATE_DB_PASSWORD:?TEMPLATE_DB_PASSWORD is required}
+      MARIADB_ROOT_PASSWORD: ${TEMPLATE_DB_ROOT_PASSWORD:?TEMPLATE_DB_ROOT_PASSWORD is required}
     volumes:
       - demopress_template_db:/var/lib/mysql
     networks:
