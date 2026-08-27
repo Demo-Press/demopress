@@ -2,6 +2,6 @@
   "name": "demopress",
   "version": "1.0.0",
   "private": true,
-  "description": "Disposable branded WordPress demo platform",
+  "description": "Self-hosted disposable WordPress demo platform",
   "license": "MIT"
 }
