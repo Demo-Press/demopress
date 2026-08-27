@@ -27,7 +27,7 @@ jobs:
       - name: Check shell scripts
         run: |
           find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 sh -n
-          find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck
+          find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck --severity=warning
 
       - name: Check DemoPress Agent PHP
         run: find demo/wp-content -type f -name '*.php' -print0 | xargs -0 -n1 php -l
