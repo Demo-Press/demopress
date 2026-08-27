@@ -5,33 +5,33 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  syntax:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
       - name: Check launcher JavaScript
         run: find launcher/src -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+
       - name: Check shell scripts
-        run: find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 sh -n
-      - name: Guard responsive public navigation
         run: |
-          grep -F 'public-nav public-nav-desktop' launcher/src/ui.js
-          grep -F '.public-nav-desktop{margin-left:auto}' launcher/src/ui.js
-          grep -F '.public-nav-desktop{display:none}.public-menu{display:block' launcher/src/ui.js
-          grep -F 'aria-label="Mobile primary"' launcher/src/ui.js
-      - name: Guard external theme selection
-        run: |
-          grep -F 'source_dir="$staging/themes/$THEME_NAME"' launcher/entrypoint.sh
-          grep -F '[ -f "$staging/theme.json" ]' launcher/entrypoint.sh
-          grep -F 'Demo-Press/demopress-themes/tarball/{ref}' env/wpraffle.env.example
-          test ! -e themes/wpraffle/theme.json
-          test ! -e themes/wpraffle/theme.css
+          find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 sh -n
+          find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck --severity=warning
+
       - name: Check DemoPress Agent PHP
         run: find demo/wp-content -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
       - name: Check JSON files
         run: |
           node - <<'NODE'
@@ -39,6 +39,31 @@ jobs:
           function walk(p){for(const e of fs.readdirSync(p,{withFileTypes:true})){const f=path.join(p,e.name);if(e.isDirectory()&&!f.includes('/.git'))walk(f);else if(e.isFile()&&f.endsWith('.json'))JSON.parse(fs.readFileSync(f,'utf8'));}}
           walk('.');
           NODE
+
+      - name: Validate Docker Compose
+        run: cp env/demopress.env.example .env && docker compose config --quiet
+
+      - name: Build launcher image
+        run: docker build -f launcher/Dockerfile -t demopress-launcher:ci .
+
+      - name: Build WordPress runtime image
+        run: docker build -f demo/Dockerfile -t demopress-wordpress:1.0 demo
+
+      - name: Guard responsive public navigation
+        run: |
+          grep -F 'public-nav public-nav-desktop' launcher/src/ui.js
+          grep -F '.public-nav-desktop{margin-left:auto}' launcher/src/ui.js
+          grep -F '.public-nav-desktop{display:none}.public-menu{display:block' launcher/src/ui.js
+          grep -F 'aria-label="Mobile primary"' launcher/src/ui.js
+
+      - name: Guard external theme selection
+        run: |
+          grep -F 'source_dir="$staging/themes/$THEME_NAME"' launcher/entrypoint.sh
+          grep -F '[ -f "$staging/theme.json" ]' launcher/entrypoint.sh
+          grep -F 'Demo-Press/demopress-themes/tarball/{ref}' env/wpraffle.env.example
+          test ! -e themes/wpraffle/theme.json
+          test ! -e themes/wpraffle/theme.css
+
       - name: Guard canonical DemoPress Agent REST route
         run: |
           node - <<'NODE'
@@ -47,7 +72,8 @@ jobs:
           if(!s.includes('/wp-json/demopress-agent/v1/${encodeURIComponent(ep)}/')) throw new Error('Agent pretty REST URL must end with a trailing slash');
           if(!s.includes('redirect:"manual"')) throw new Error('Authenticated template requests must not follow redirects');
           NODE
-      - name: Guard V1 release hardening
+
+      - name: Guard v1 release hardening
         run: |
           node - <<'NODE'
           const fs=require('fs');
@@ -55,8 +81,21 @@ jobs:
           const db=fs.readFileSync('launcher/src/database.js','utf8');
           const life=fs.readFileSync('launcher/src/lifecycle.js','utf8');
           const server=fs.readFileSync('launcher/src/server.js','utf8');
+          const compose=fs.readFileSync('docker-compose.yml','utf8');
+          const installer=fs.readFileSync('install.sh','utf8');
+          const rebuild=fs.readFileSync('scripts/rebuild-demo-image.sh','utf8');
           if(!cfg.includes('platformVersion:"1.0.0"')||!cfg.includes('buildVersion:"1.0.0"')) throw new Error('V1 version markers are not aligned');
           if(!db.includes('demopress_public_launch_guard')||!db.includes('demopress_public_launch_log')) throw new Error('Database launch guard is missing');
           if(!life.includes('stale_provisioning_timeout')||!life.includes("delete_reason,'')!='expired'")) throw new Error('Lifecycle recovery/expiry guard is missing');
           for(const h of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','Permissions-Policy','Strict-Transport-Security']) if(!server.includes(h)) throw new Error('Missing security header: '+h);
+          for(const required of ['ADMIN_PASSWORD:?','INTERNAL_TEMPLATE_TOKEN:?','TEMPLATE_DB_PASSWORD:?','TEMPLATE_DB_ROOT_PASSWORD:?']) if(!compose.includes(required)) throw new Error('Required Compose secret guard missing: '+required);
+          if(installer.includes('1.0-RC')||installer.includes('.env.example')&&!installer.includes('env/demopress.env.example')) throw new Error('Installer still contains RC/stale environment instructions');
+          if(installer.includes('demopress-wordpress:latest')||rebuild.includes('demopress-wordpress:latest')) throw new Error('Unpinned latest runtime reference remains');
           NODE
+
+      - name: Reject obvious committed secrets
+        run: |
+          if git grep -nE '(ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)' -- . ':!*.md'; then
+            echo 'Potential committed secret detected.' >&2
+            exit 1
+          fi

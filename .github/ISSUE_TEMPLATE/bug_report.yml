@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible DemoPress problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not use public issues for exploitable security vulnerabilities. Follow SECURITY.md instead."
+  - type: input
+    id: version
+    attributes:
+      label: DemoPress version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the expected result and the actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Docker/Compose version, host OS, reverse proxy/platform and relevant configuration with secrets removed.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove passwords, tokens, visitor data and private URLs before posting.

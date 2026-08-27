@@ -1,167 +1,132 @@
-# DemoPress 1.0
+# DemoPress
 
-DemoPress is a self-hosted platform for creating private, disposable WordPress product demos from a maintained golden template.
+**Self-hosted disposable WordPress demos.**
 
-## Core model
+DemoPress turns a maintained WordPress template into isolated, temporary product demos. Each launch receives its own WordPress and MariaDB containers, temporary restricted WordPress access, a wildcard hostname and automatic expiry.
 
-- One generic launcher/runtime codebase.
-- `DEMOPRESS_THEME` selects launcher branding from a bundled or externally supplied theme.
-- `DEMOPRESS_PROFILE` selects required WordPress plugins/theme and product copy.
-- Golden-template exports become candidate snapshots containing `database.sql`, `content.tar.gz`, optional `uploads.tar.gz` and `manifest.json`.
-- Candidate snapshots are validated with an isolated disposable test before promotion for public use.
-- Demo Presets select a validated snapshot plus product requirements, start path and lifetime settings.
-- Every disposable WordPress demo receives its own MariaDB container and temporary WordPress user.
-- Docker resources are labelled with `com.demopress.instance=<DOMAIN>` so multiple DemoPress deployments on one daemon remain isolated.
-- The generic runtime image is `demopress-wordpress:1.0`.
-- Automatic reconciliation reports unknown/orphan resources but does not silently remove resources belonging to another DemoPress instance.
+DemoPress 1.0 is designed for plugin/theme vendors and WordPress product teams that want a real interactive demo environment without giving visitors access to a shared installation.
 
-## First deployment
+[Website](https://demopress.co.uk) · [Installation](docs/INSTALL.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
 
-1. Configure the environment values from `env/demopress.env.example`.
-2. Deploy `docker-compose.yml`.
-3. Visit the template WordPress domain and complete WordPress installation if required.
-4. Install and configure the product plugins/theme you want visitors to experience.
-5. Ensure **DemoPress Agent** is active.
-6. Open **WordPress → Settings → DemoPress Agent** and confirm the Agent secret is configured.
-7. Configure **Demo user access** in DemoPress Agent.
-8. Visit `/manage` on the launcher domain and sign in with the configured Manager password.
-9. Open **Template**, validate the source and export a candidate snapshot.
-10. Validate the candidate with an isolated test and promote it after validation passes.
-11. Configure or review the Demo Preset that should use the validated snapshot.
-12. Launch a test from the promoted snapshot and verify the disposable site, temporary user and permitted WordPress areas.
-13. When the test is healthy, make the public launcher available to visitors.
+## What DemoPress provides
 
-## DemoPress Agent secret key
+- **Golden-template workflow** — maintain one persistent WordPress source of truth.
+- **Validated snapshots** — export candidate snapshots, test them in isolation and promote only known-good snapshots.
+- **Disposable isolation** — separate WordPress and MariaDB containers per demo.
+- **Controlled WordPress Admin** — generated restricted demo roles rather than normal Administrator accounts.
+- **Demo Presets** — expose multiple demo experiences from one DemoPress installation.
+- **Visitor capture** — Name, Email, Company and Website can independently be Off, Optional or Required.
+- **Optional email delivery** — Resend can send ready-demo details without being required for provisioning.
+- **Manager** — responsive control plane for demos, snapshots, presets, analytics, configuration and diagnostics.
+- **Automatic lifecycle** — readiness checks, rate limits, expiry, destruction and orphan-resource reconciliation.
+- **Product-neutral core** — profiles define product requirements while launcher themes control presentation.
 
-WordPress **Settings → DemoPress Agent** shows whether an effective secret exists and whether it comes from WordPress or the environment. The actual key is never displayed; only a short SHA-256 fingerprint is shown.
+## Architecture
 
-You can keep, replace, generate or clear the saved WordPress key. A blank replacement does not destroy the existing key.
+```text
+                    ┌────────────────────┐
+                    │ Golden WordPress   │
+                    │     template       │
+                    └─────────┬──────────┘
+                              │
+                       export / validate
+                              │
+                              ▼
+                    ┌────────────────────┐
+Visitor ──────────► │ DemoPress launcher │ ◄──────── Manager
+                    └─────────┬──────────┘
+                              │
+                         disposable demo
+                              │
+                    ┌─────────┴──────────┐
+                    │                    │
+               WordPress             MariaDB
+               container             container
+```
 
-For automated deployments, set `INTERNAL_TEMPLATE_TOKEN`. A key saved inside WordPress takes precedence when present. The launcher and Agent must use the same effective secret.
+Snapshot contents include the database, captured WordPress content/plugins/themes, optional uploads and a manifest. Product-specific files come from the validated snapshot rather than a product-specific DemoPress runtime image.
 
-## Demo user access
+## Requirements
 
-Demo-user permissions are configured on the **golden WordPress template**, because WordPress is the authoritative source for installed roles, capabilities and plugin admin menus.
+DemoPress is intended for a Linux Docker host. You need:
 
-Open **Settings → DemoPress Agent → Demo user access** and configure:
+- Docker Engine and Docker Compose v2;
+- wildcard DNS for disposable demo hostnames;
+- HTTPS for launcher, template and wildcard demo domains;
+- a reverse proxy network reachable by the launcher and disposable demos;
+- persistent storage for DemoPress state and the golden-template WordPress/database volumes;
+- sufficient memory for the configured number of concurrent WordPress/MariaDB pairs.
 
-- **Baseline role** — the WordPress role whose normal product capabilities should be used as the starting point for the disposable demo role.
-- **Admin menu restriction** — optionally enable a top-level admin-area whitelist.
-- **Top-level admin areas** — choose the WordPress/plugin menus visitors should be able to access.
-- **Installed-theme switching** — optionally allow visitors to switch between themes already present in the validated snapshot.
+Coolify is supported directly, but DemoPress remains a standard Docker Compose application.
 
-The Agent labels discovered WordPress admin areas as **Allowed**, **Limited** or **Protected**. Protected platform-management areas cannot be selected, so the configuration shown on the golden template matches what a visitor can actually use in the resulting demo. Appearance/Themes is a limited area: it can be exposed safely while theme installation, upload, deletion, updating and code editing remain blocked. Installed-theme switching is a separate explicit option.
+> [!WARNING]
+> DemoPress requires access to `/var/run/docker.sock`. Docker socket access is effectively root-equivalent host access. Run DemoPress on an appropriately isolated host, preferably a dedicated VPS, and never expose the Docker API over unauthenticated TCP. Read [SECURITY.md](SECURITY.md) before deployment.
 
-Plugin menu items are discovered from the golden template, so install and activate the product before configuring the whitelist.
+## Quick start
 
-When a disposable demo is created, DemoPress builds a dedicated `demopress_demo_admin` role from the selected baseline. It removes platform-dangerous capabilities such as plugin management, theme installation/editing, WordPress core updates and user administration. If installed-theme switching is explicitly enabled, only `switch_themes` is restored; the destructive theme-management capabilities remain protected. The temporary user is assigned to this generated role rather than being made a normal Administrator.
+```bash
+git clone https://github.com/Demo-Press/demopress.git
+cd demopress
+./install.sh
+```
 
-The Agent and clone-side MU security guard use the same saved access policy. Protected WordPress platform URLs remain blocked even if the baseline role is broad, while safe limited areas such as Appearance can remain available when selected.
+The installer creates a local `.env` from `env/demopress.env.example` and a local profile file when they do not already exist.
 
-The access policy is stored in the golden WordPress database, so it automatically travels with snapshot exports. After changing access settings, export and validate a **new candidate snapshot**; existing snapshots keep the access policy they were created with.
+Generate deployment secrets:
 
-## Visitor capture
+```bash
+./scripts/generate-secrets.sh
+```
 
-Visitor capture is independent of email delivery. In **Manager → Visitor Capture** you can configure Name, Email, Company and Website individually as Off, Optional or Required.
+Replace every `CHANGE-ME` value in `.env`, configure your domains/network, then validate Compose before deployment:
 
-Captured values are stored against the demo for Manager/analytics use whether or not an email service is configured.
+```bash
+docker compose config
+docker compose up -d --build
+```
 
-If Resend is configured and an email address was supplied, DemoPress can send the ready demo URL, temporary credentials and one-click Admin link when provisioning completes. Email-delivery failures are recorded but do not turn a working demo into a failed demo.
+For the complete production workflow, including DNS, golden-template setup, DemoPress Agent configuration, snapshot validation and promotion, follow [docs/INSTALL.md](docs/INSTALL.md).
 
-## Golden-template and snapshot workflow
+## Release workflow for a demo product
 
-The recommended operating workflow is:
+1. Configure the persistent golden-template WordPress site with the product, content and settings visitors should receive.
+2. Keep **DemoPress Agent** active and configure the demo-user access policy.
+3. Complete **Manager → Setup** and confirm the required plugin/theme inventory.
+4. Run **Manager → Template → Validate**.
+5. Export a candidate snapshot.
+6. Run isolated snapshot validation / Administrator Test.
+7. Promote a passing snapshot.
+8. Assign it to the intended Demo Preset.
+9. Launch a public test and verify frontend, one-click Admin, permissions and expiry.
 
-1. Make product/content changes on the permanent template WordPress site.
-2. Configure DemoPress Agent secret and demo-user access policy.
-3. Validate the golden template in Manager.
-4. Export a candidate snapshot.
-5. Run isolated validation against that candidate.
-6. Inspect validation diagnostics if it fails; a failed or untested candidate should not be used for public demos.
-7. Promote the candidate after validation passes.
-8. Assign the validated snapshot to the appropriate Demo Preset.
-9. Launch a test and confirm the public site, WordPress Admin, role restrictions and required product features.
-10. Use the public launcher after the promoted snapshot and preset have been verified.
-
-Publishing/exporting a snapshot does not itself make it trusted for public use. Snapshot validation and promotion are deliberate release steps. Template WordPress content remains persistent across normal redeployments.
-
-## Demo Presets
-
-A single DemoPress installation can expose multiple configured demo experiences. Presets can select a validated snapshot, required plugins/theme, start path, lifetime limits and whether the preset is enabled/default. Existing installations retain a backwards-compatible `default` preset.
-
-The public launcher supports `?preset=<slug>` and shows a selector when multiple presets are enabled.
-
-## Demo Experience
-
-Manager includes product-neutral Demo Experience controls for disposable environments. These can provide temporary-demo context such as a toolbar, expiry information, documentation/product links and optional WordPress notice suppression without modifying the demonstrated product configuration.
+Publishing a candidate snapshot does not make it trusted for public use. Validation and promotion are deliberate release gates.
 
 ## Profiles and launcher themes
 
-To add another product deployment, create a product-neutral profile and choose either a bundled or externally supplied launcher theme.
+`DEMOPRESS_PROFILE` selects product requirements and copy from `profiles/<name>.json`. Manager-saved profile customisations persist in `/data/profile.json`.
 
-Bundled files use:
+`DEMOPRESS_THEME` selects the customer-facing launcher theme. Bundled themes live under `themes/<name>/`; `themes/template` is a starter. Launcher branding is independent of the WordPress theme restored into disposable demos.
 
-- `profiles/<name>.json`
-- `themes/<name>/theme.json`
-- `themes/<name>/theme.css`
+External/private launcher themes are supported with `DEMOPRESS_THEME_URL`, optional `DEMOPRESS_THEME_REF` and `DEMOPRESS_THEME_TOKEN`. Tokens belong only in deployment secrets and are sent through the Authorization header rather than embedded in URLs.
 
-A starter launcher theme is available under `themes/template`.
+## Documentation
 
-Deploy a bundled theme with:
+- [Installation](docs/INSTALL.md)
+- [Golden template workflow](docs/TEMPLATE.md)
+- [Profiles](docs/PROFILE.md)
+- [Setup Wizard](docs/SETUP-WIZARD.md)
+- [Diagnostics](docs/DIAGNOSTICS.md)
+- [Lifecycle and cleanup](docs/CLEANUP.md)
+- [Detailed security model](docs/SECURITY.md)
+- [UI coverage](docs/UI-PAGES.md)
+- [Release checklist](docs/RELEASE-CHECKLIST.md)
 
-```env
-DEMOPRESS_PROFILE=<name>
-DEMOPRESS_THEME=<name>
-```
+The public documentation site at [demopress.co.uk](https://demopress.co.uk) tracks the same stable 1.0 deployment model.
 
-### Private / external launcher themes
+## Contributing
 
-Product-specific launcher branding does not need to be committed to the DemoPress core repository. DemoPress can download a theme archive when the launcher container starts, install the selected theme into `/app/themes/<DEMOPRESS_THEME>`, validate that it contains `theme.json`, and then start normally.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security vulnerabilities must not be reported through public issues; follow [SECURITY.md](SECURITY.md).
 
-WPRaffle uses the private [`Demo-Press/demopress-themes`](https://github.com/Demo-Press/demopress-themes) repository:
+## Licence
 
-```env
-DEMOPRESS_PROFILE=wpraffle
-DEMOPRESS_THEME=wpraffle
-DEMOPRESS_THEME_URL=https://api.github.com/repos/Demo-Press/demopress-themes/tarball/{ref}
-DEMOPRESS_THEME_REF=main
-DEMOPRESS_THEME_TOKEN=
-```
-
-Set `DEMOPRESS_THEME_TOKEN` only in deployment secrets. Use a fine-grained GitHub token with read-only Contents access to `Demo-Press/demopress-themes`; never embed it in the URL or commit it. The downloader sends it in the `Authorization: Bearer` header.
-
-`DEMOPRESS_THEME_URL` is optional for deployments that use bundled generic themes. `DEMOPRESS_THEME_REF` defaults to `main`, and a `{ref}` placeholder in the URL is replaced at startup. Pinning a tag or commit through this variable is supported when deployments need immutable theme releases.
-
-A shared archive stores themes under `themes/<DEMOPRESS_THEME>/`. Theme-only archives with `theme.json` at their root remain supported for backwards compatibility. DemoPress selects only the configured theme and refuses to start if it is absent, preventing a private-branded deployment from silently falling back after a failed download.
-
-This launcher branding is separate from the WordPress theme demonstrated to visitors: WordPress plugins, themes and content still come from validated golden-template snapshots.
-
-## Manager authentication and security
-
-`/manage` uses a dedicated DemoPress sign-in page backed by the configured Manager password and a signed session cookie. Manager write actions are protected by authentication, CSRF validation and same-origin checks.
-
-Use HTTPS for both launcher and template domains. Keep Manager, Agent, database, mail-provider and private-theme credentials in deployment secrets rather than profile JSON or source control.
-
-## Useful checks
-
-Before considering a deployment complete, verify:
-
-- Template validation passes.
-- Agent secret is configured.
-- Demo user baseline role, access-state labels, allowed menus and installed-theme switching setting are intentional.
-- A newly exported snapshot reflects the latest Agent access policy.
-- The intended snapshot has passed isolated validation and has been promoted.
-- Public presets reference the intended validated snapshot.
-- A test demo reaches **Ready** only after clone finalisation succeeds.
-- Public demo URL works through HTTPS.
-- One-click Admin signs in as the generated DemoPress demo role.
-- Allowed and limited WordPress areas behave as described by the Agent UI.
-- Protected WordPress platform areas return access denied for the demo user.
-- Visitor-capture requirements match your privacy/lead-capture policy.
-- Resend delivery works if enabled.
-- An external launcher theme downloads and validates successfully if configured.
-- Manager diagnostics show no unexpected orphan resources.
-
-## Runtime image
-
-DemoPress intentionally uses one generic runtime image. Product-specific plugins, themes, uploads and database state come from snapshots. Launcher themes are presentation assets and may be bundled or downloaded separately at launcher startup. Avoid maintaining separate product-specific DemoPress runtime repositories or images unless you have a specific infrastructure reason to do so.
+DemoPress is released under the [MIT License](LICENSE).
