@@ -1,0 +1,32 @@
+name: Publish GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag matches application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${VERSION}" || {
+            echo "Tag ${GITHUB_REF_NAME} does not match package version v${VERSION}." >&2
+            exit 1
+          }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "DemoPress ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
