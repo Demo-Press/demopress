@@ -130,10 +130,14 @@ if [ -n "$THEME_URL" ]; then
 
   source_profile="$staging/profiles/$PROFILE_NAME.json"
   if [ -f "$source_profile" ]; then
-    mkdir -p "$PROFILE_CACHE_ROOT" "$PROFILE_ROOT"
-    cp "$source_profile" "$PROFILE_CACHE_ROOT/$PROFILE_NAME.json"
-    cp "$source_profile" "$PROFILE_ROOT/$PROFILE_NAME.json"
-    echo "DemoPress: external profile '$PROFILE_NAME' installed."
+    if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$source_profile" 2>/dev/null; then
+      mkdir -p "$PROFILE_CACHE_ROOT" "$PROFILE_ROOT"
+      cp "$source_profile" "$PROFILE_CACHE_ROOT/$PROFILE_NAME.json"
+      cp "$source_profile" "$PROFILE_ROOT/$PROFILE_NAME.json"
+      echo "DemoPress: external profile '$PROFILE_NAME' installed."
+    else
+      echo "DemoPress: external profile '$PROFILE_NAME' is not valid JSON; ignoring it." >&2
+    fi
   fi
 
   use_cached_or_default_profile
