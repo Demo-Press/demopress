@@ -29,6 +29,9 @@ jobs:
           find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 sh -n
           find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck --severity=warning
 
+      - name: Test external launcher theme fallback
+        run: sh tests/entrypoint-theme.sh
+
       - name: Check DemoPress Agent PHP
         run: find demo/wp-content -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
@@ -60,6 +63,8 @@ jobs:
         run: |
           grep -F 'source_dir="$staging/themes/$THEME_NAME"' launcher/entrypoint.sh
           grep -F '[ -f "$staging/theme.json" ]' launcher/entrypoint.sh
+          grep -F 'THEME_CACHE_ROOT="${DEMOPRESS_THEME_CACHE_ROOT:-/data/themes}"' launcher/entrypoint.sh
+          grep -F 'DEMOPRESS_THEME=default' launcher/entrypoint.sh
           grep -F 'your-organisation/your-theme-repository/tarball/{ref}' docs/INSTALL.md
           test ! -e env/wpraffle.env.example
           test ! -e profiles/wpraffle.json
