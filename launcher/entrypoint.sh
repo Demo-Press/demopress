@@ -7,6 +7,9 @@ THEME_REF="${DEMOPRESS_THEME_REF:-main}"
 THEME_TOKEN="${DEMOPRESS_THEME_TOKEN:-}"
 THEME_ROOT="${DEMOPRESS_THEME_ROOT:-/app/themes}"
 THEME_CACHE_ROOT="${DEMOPRESS_THEME_CACHE_ROOT:-/data/themes}"
+PROFILE_NAME="${DEMOPRESS_PROFILE:-default}"
+PROFILE_ROOT="${DEMOPRESS_PROFILE_ROOT:-/app/profiles}"
+PROFILE_CACHE_ROOT="${DEMOPRESS_PROFILE_CACHE_ROOT:-/data/profiles}"
 
 use_cached_or_default_theme() {
   cached="$THEME_CACHE_ROOT/$THEME_NAME"
@@ -25,6 +28,26 @@ use_cached_or_default_theme() {
   export DEMOPRESS_THEME
 }
 
+use_cached_or_default_profile() {
+  bundled="$PROFILE_ROOT/$PROFILE_NAME.json"
+  cached="$PROFILE_CACHE_ROOT/$PROFILE_NAME.json"
+
+  if [ -f "$bundled" ]; then
+    return
+  fi
+
+  if [ -f "$cached" ]; then
+    mkdir -p "$PROFILE_ROOT"
+    cp "$cached" "$bundled"
+    echo "DemoPress: using cached external profile '$PROFILE_NAME'." >&2
+    return
+  fi
+
+  echo "DemoPress: profile '$PROFILE_NAME' is unavailable; using bundled default profile." >&2
+  DEMOPRESS_PROFILE=default
+  export DEMOPRESS_PROFILE
+}
+
 # Optional runtime theme download. This keeps branded/private launcher themes
 # outside the DemoPress repository while preserving bundled themes as the
 # default behaviour.
@@ -32,6 +55,12 @@ if [ -n "$THEME_URL" ]; then
   case "$THEME_NAME" in
     *[!A-Za-z0-9_-]*|'')
       echo "DemoPress: invalid DEMOPRESS_THEME value" >&2
+      exit 1
+      ;;
+  esac
+  case "$PROFILE_NAME" in
+    *[!A-Za-z0-9_-]*|'')
+      echo "DemoPress: invalid DEMOPRESS_PROFILE value" >&2
       exit 1
       ;;
   esac
@@ -60,6 +89,7 @@ if [ -n "$THEME_URL" ]; then
   if [ "$download_status" -ne 0 ]; then
     echo "DemoPress: external launcher theme download failed (curl exit $download_status)." >&2
     use_cached_or_default_theme
+    use_cached_or_default_profile
     exec node src/server.js
   fi
 
@@ -69,6 +99,7 @@ if [ -n "$THEME_URL" ]; then
   if ! tar -xzf "$archive" -C "$staging" --strip-components=1; then
     echo "DemoPress: external launcher theme archive is invalid." >&2
     use_cached_or_default_theme
+    use_cached_or_default_profile
     exec node src/server.js
   fi
   source_dir="$staging/themes/$THEME_NAME"
@@ -79,6 +110,7 @@ if [ -n "$THEME_URL" ]; then
   if [ ! -f "$source_dir/theme.json" ]; then
     echo "DemoPress: external archive does not contain themes/$THEME_NAME/theme.json or root theme.json." >&2
     use_cached_or_default_theme
+    use_cached_or_default_profile
     exec node src/server.js
   fi
 
@@ -95,6 +127,16 @@ if [ -n "$THEME_URL" ]; then
   mkdir -p "$target"
   cp -R "$cache"/. "$target"/
   echo "DemoPress: external launcher theme '$THEME_NAME' installed."
+
+  source_profile="$staging/profiles/$PROFILE_NAME.json"
+  if [ -f "$source_profile" ]; then
+    mkdir -p "$PROFILE_CACHE_ROOT" "$PROFILE_ROOT"
+    cp "$source_profile" "$PROFILE_CACHE_ROOT/$PROFILE_NAME.json"
+    cp "$source_profile" "$PROFILE_ROOT/$PROFILE_NAME.json"
+    echo "DemoPress: external profile '$PROFILE_NAME' installed."
+  fi
+
+  use_cached_or_default_profile
 fi
 
 exec node src/server.js
