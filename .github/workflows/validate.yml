@@ -60,9 +60,13 @@ jobs:
         run: |
           grep -F 'source_dir="$staging/themes/$THEME_NAME"' launcher/entrypoint.sh
           grep -F '[ -f "$staging/theme.json" ]' launcher/entrypoint.sh
-          grep -F 'Demo-Press/demopress-themes/tarball/{ref}' env/wpraffle.env.example
-          test ! -e themes/wpraffle/theme.json
-          test ! -e themes/wpraffle/theme.css
+          grep -F 'your-organisation/your-theme-repository/tarball/{ref}' docs/INSTALL.md
+          test ! -e env/wpraffle.env.example
+          test ! -e profiles/wpraffle.json
+          test ! -e themes/wpraffle
+
+      - name: Reject unreferenced legacy agent assets
+        run: test ! -e demo/wp-content/plugins/demopress-agent/tools.js
 
       - name: Guard canonical DemoPress Agent REST route
         run: |
