@@ -47,6 +47,7 @@ TEMPLATE_DB_PASSWORD=replace-with-a-random-password
 TEMPLATE_DB_ROOT_PASSWORD=replace-with-a-different-random-password
 
 DOCKER_NETWORK=coolify
+DOCKER_API_VERSION=1.44
 DEMO_IMAGE=demopress-wordpress:1.0
 AUTO_BUILD_DEMO_IMAGE=1
 ```
@@ -71,7 +72,7 @@ DEMOPRESS_THEME_TOKEN=
 
 Store `DEMOPRESS_THEME_TOKEN` as a deployment secret. It must be a fine-grained GitHub token with read-only Contents access to `Demo-Press/demopress-themes`. Do not commit the token or include it in `DEMOPRESS_THEME_URL`. Generic deployments that use a bundled theme do not need these external-theme values.
 
-The launcher listens on port 3000 inside its container. In Coolify, application routing should expose the service; a separate `PORT` environment variable is not required.
+`DOCKER_API_VERSION=1.44` prevents older client negotiation against current Docker Engines; keep it unless your Engine requires a newer supported API. The launcher listens on port 3000 inside its container. In Coolify, application routing should expose the service; a separate `PORT` environment variable is not required.
 
 ## 4. Runtime image
 

@@ -57,5 +57,10 @@ First stable public release of DemoPress.
 - Installer, environment examples and runtime image tooling are aligned to the stable 1.0 deployment contract.
 - GitHub Actions validates JavaScript, PHP, shell scripts, JSON, Docker Compose and both production images.
 
+### Final release refinements
+- Manager Setup branding now overrides launcher-theme identity where configured, including platform/product labels, homepage, logo, favicon, accent and footer copy.
+- The documented Docker API compatibility floor is 1.44 for current Docker Engine deployments.
+- Core/Cloud product boundaries and hosted integration checks are documented.
+
 ### Upgrade note
 Installations created from pre-1.0 release-candidate builds should re-test existing snapshots in **Manager → Template → Validate** and promote a passing snapshot before relying on it for public presets. Review and regenerate deployment secrets if any pre-release environment used placeholder or predictable values.

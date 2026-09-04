@@ -43,3 +43,11 @@
 - GitHub validation workflow is green on the release commit.
 - README, `docs/`, environment example and demopress.co.uk documentation describe the same current workflow.
 - Changelog contains the final 1.0.0 release notes.
+
+
+## Hosted integration boundary
+
+- [ ] DemoPress Core can be deployed and operated without DemoPress Cloud.
+- [ ] Cloud-specific accounts, billing and provider credentials are not present in Core.
+- [ ] A Cloud-provisioned deployment passes the same launcher, template, snapshot and disposable-demo checks as a self-hosted deployment.
+- [ ] `DOCKER_API_VERSION` is compatible with the target Docker Engine (1.44 is the documented baseline).

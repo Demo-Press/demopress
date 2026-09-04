@@ -6,7 +6,7 @@ DemoPress turns a maintained WordPress template into isolated, temporary product
 
 DemoPress 1.0 is designed for plugin/theme vendors and WordPress product teams that want a real interactive demo environment without giving visitors access to a shared installation.
 
-[Website](https://demopress.co.uk) · [Installation](docs/INSTALL.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
+[Website](https://demopress.co.uk) · [Hosted DemoPress Cloud](https://cloud.demopress.co.uk) · [Installation](docs/INSTALL.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
 
 ## What DemoPress provides
 
@@ -45,6 +45,10 @@ Visitor ──────────► │ DemoPress launcher │ ◄──�
 ```
 
 Snapshot contents include the database, captured WordPress content/plugins/themes, optional uploads and a manifest. Product-specific files come from the validated snapshot rather than a product-specific DemoPress runtime image.
+
+## Core and Cloud
+
+This repository is **DemoPress Core**: the open, self-hosted runtime for one deployment. [DemoPress Cloud](https://cloud.demopress.co.uk) is a separate hosted control plane that provisions and operates Core installations for customers. Billing, customer accounts and infrastructure-provider credentials intentionally remain outside Core.
 
 ## Requirements
 

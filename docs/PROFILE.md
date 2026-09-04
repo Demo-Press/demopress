@@ -52,3 +52,8 @@ Example:
 The golden snapshot also carries the template's plugin and theme files, so product-specific code is not baked into the DemoPress core image.
 
 Demo Presets can select validated snapshots and apply per-demo required components, start path and lifetime settings without creating a separate DemoPress installation.
+
+
+## Setup branding precedence
+
+Manager Setup values are applied over the selected launcher theme for product/company identity, homepage, public copy, logo, favicon, accent and footer text. The selected theme remains the presentation baseline. Clearing an optional logo or favicon returns that element to the theme fallback.

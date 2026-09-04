@@ -84,7 +84,10 @@ jobs:
           const compose=fs.readFileSync('docker-compose.yml','utf8');
           const installer=fs.readFileSync('install.sh','utf8');
           const rebuild=fs.readFileSync('scripts/rebuild-demo-image.sh','utf8');
+          const ui=fs.readFileSync('launcher/src/ui.js','utf8');
           if(!cfg.includes('platformVersion:"1.0.0"')||!cfg.includes('buildVersion:"1.0.0"')) throw new Error('V1 version markers are not aligned');
+          if(!ui.includes('const profile=require("./profile")')||!ui.includes('branding.footerText')) throw new Error('Saved profile branding is not applied to public pages');
+          if(!compose.includes('DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.44}')) throw new Error('Docker API compatibility floor is missing');
           if(!db.includes('demopress_public_launch_guard')||!db.includes('demopress_public_launch_log')) throw new Error('Database launch guard is missing');
           if(!life.includes('stale_provisioning_timeout')||!life.includes("delete_reason,'')!='expired'")) throw new Error('Lifecycle recovery/expiry guard is missing');
           for(const h of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','Permissions-Policy','Strict-Transport-Security']) if(!server.includes(h)) throw new Error('Missing security header: '+h);
