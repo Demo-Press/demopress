@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+ROOT=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
@@ -35,7 +35,7 @@ chmod +x "$TMP/bin/curl" "$TMP/bin/node"
 run_entrypoint() {
   PATH="$TMP/bin:$PATH" \
   DEMOPRESS_THEME=wpraffle \
-  DEMOPRESS_THEME_URL=https://example.invalid/themes/{ref} \
+  DEMOPRESS_THEME_URL='https://example.invalid/themes/{ref}' \
   DEMOPRESS_THEME_ROOT="$TMP/runtime" \
   DEMOPRESS_THEME_CACHE_ROOT="$TMP/cache" \
   TEST_ARCHIVE="$TMP/theme.tar.gz" \
