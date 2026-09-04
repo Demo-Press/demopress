@@ -94,6 +94,8 @@ jobs:
           for(const required of ['ADMIN_PASSWORD:?','INTERNAL_TEMPLATE_TOKEN:?','TEMPLATE_DB_PASSWORD:?','TEMPLATE_DB_ROOT_PASSWORD:?']) if(!compose.includes(required)) throw new Error('Required Compose secret guard missing: '+required);
           if(installer.includes('1.0-RC')||installer.includes('.env.example')&&!installer.includes('env/demopress.env.example')) throw new Error('Installer still contains RC/stale environment instructions');
           if(installer.includes('demopress-wordpress:latest')||rebuild.includes('demopress-wordpress:latest')) throw new Error('Unpinned latest runtime reference remains');
+          const release=fs.readFileSync('.github/workflows/release.yml','utf8');
+          if(!release.includes('gh release view "$GITHUB_REF_NAME"')||!release.includes('Publishing a pre-created draft can race')) throw new Error('Release workflow must safely handle an existing or concurrently published draft');
           NODE
 
       - name: Reject obvious committed secrets

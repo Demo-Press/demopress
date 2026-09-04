@@ -26,7 +26,25 @@ jobs:
             exit 1
           }
 
-      - name: Create GitHub Release
+      - name: Create or verify GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "DemoPress ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving its curated notes unchanged."
+            exit 0
+          fi
+
+          if gh release create "$GITHUB_REF_NAME" \
+            --title "DemoPress ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --verify-tag; then
+            exit 0
+          fi
+
+          # Publishing a pre-created draft can race this tag-triggered workflow.
+          # Treat the release as successful if it became visible meanwhile.
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1
