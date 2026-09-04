@@ -12,6 +12,7 @@ snapshots/
 
 # Node
 node_modules/
+site/dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
