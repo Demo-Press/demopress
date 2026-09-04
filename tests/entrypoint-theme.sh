@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
+REAL_NODE=$(command -v node)
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 mkdir -p "$TMP/bin" "$TMP/archive/repository/themes/wpraffle" "$TMP/archive/repository/profiles"
@@ -10,6 +11,9 @@ printf '{"name":"WPRaffle"}\n' > "$TMP/archive/repository/themes/wpraffle/theme.
 printf 'body { color: red; }\n' > "$TMP/archive/repository/themes/wpraffle/theme.css"
 printf '{"productName":"WPRaffle"}\n' > "$TMP/archive/repository/profiles/wpraffle.json"
 tar -czf "$TMP/theme.tar.gz" -C "$TMP/archive" repository
+cp -R "$TMP/archive" "$TMP/invalid-archive"
+printf '{"productName":"Broken"}\\n\n' > "$TMP/invalid-archive/repository/profiles/wpraffle.json"
+tar -czf "$TMP/invalid-theme.tar.gz" -C "$TMP/invalid-archive" repository
 
 cat > "$TMP/bin/curl" <<'EOF'
 #!/bin/sh
@@ -29,6 +33,9 @@ EOF
 
 cat > "$TMP/bin/node" <<'EOF'
 #!/bin/sh
+if [ "${1:-}" = "-e" ]; then
+  exec "$TEST_REAL_NODE" "$@"
+fi
 printf '%s\n%s\n' "$DEMOPRESS_THEME" "$DEMOPRESS_PROFILE" > "$TEST_RESULT"
 EOF
 chmod +x "$TMP/bin/curl" "$TMP/bin/node"
@@ -42,7 +49,8 @@ run_entrypoint() {
   DEMOPRESS_PROFILE=wpraffle \
   DEMOPRESS_PROFILE_ROOT="$TMP/profile-runtime" \
   DEMOPRESS_PROFILE_CACHE_ROOT="$TMP/profile-cache" \
-  TEST_ARCHIVE="$TMP/theme.tar.gz" \
+  TEST_ARCHIVE="${2:-$TMP/theme.tar.gz}" \
+  TEST_REAL_NODE="$REAL_NODE" \
   TEST_RESULT="$TMP/result" \
   TEST_DOWNLOAD="$1" \
   sh "$ROOT/launcher/entrypoint.sh"
@@ -54,6 +62,12 @@ test "$(sed -n '2p' "$TMP/result")" = wpraffle
 test -f "$TMP/cache/wpraffle/theme.json"
 test -f "$TMP/profile-cache/wpraffle.json"
 test -f "$TMP/profile-runtime/wpraffle.json"
+
+rm -rf "$TMP/runtime" "$TMP/profile-runtime"
+run_entrypoint success "$TMP/invalid-theme.tar.gz"
+test "$(sed -n '1p' "$TMP/result")" = wpraffle
+test "$(sed -n '2p' "$TMP/result")" = wpraffle
+grep -F '"productName":"WPRaffle"' "$TMP/profile-runtime/wpraffle.json"
 
 rm -rf "$TMP/runtime" "$TMP/profile-runtime"
 run_entrypoint failure
